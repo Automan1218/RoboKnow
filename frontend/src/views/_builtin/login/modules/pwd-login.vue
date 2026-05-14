@@ -64,11 +64,11 @@ const accounts = computed<Account[]>(() => [
 ]);
 
 function handleAccountLogin(account: Account) {
-  // 将账号信息填充到表单中，然后触发正常的验证流程
+  // Fill account information into the form, then trigger the normal validation flow
   model.userName = account.userName;
   model.password = account.password;
 
-  // 调用正常的表单提交流程，确保验证
+  // Use the normal submit flow to keep validation consistent
   handleSubmit();
 }
 </script>
@@ -103,10 +103,10 @@ function handleAccountLogin(account: Account) {
       </NButton>
 
       <span class="text-center">
-        登录即代表已阅读并同意我们的
-        <NButton text type="primary">用户协议</NButton>
-        和
-        <NButton text type="primary">隐私政策</NButton>
+        By signing in, you agree to our
+        <NButton text type="primary">User Agreement</NButton>
+        and
+        <NButton text type="primary">Privacy Policy</NButton>
       </span>
 
       <NDivider class="text-14px text-#666 !m-0">{{ $t('page.login.pwdLogin.otherAccountLogin') }}</NDivider>

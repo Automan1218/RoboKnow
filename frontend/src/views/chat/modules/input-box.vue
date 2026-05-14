@@ -20,17 +20,54 @@ watch(wsData, val => {
   const data = JSON.parse(val);
   const assistant = list.value[list.value.length - 1];
 
-  if (data.type === 'completion' && data.status === 'finished' && assistant.status !== 'error')
-    assistant.status = 'finished';
-  if (data.error) assistant.status = 'error';
-  else if (data.chunk) {
+  // Conversation completed
+  if (data.type === 'completion' && data.status === 'finished') {
+    if (assistant.status !== 'error') assistant.status = 'finished';
+    assistant.currentAgentState = undefined;
+    return;
+  }
+
+  // Error
+  if (data.error) {
+    assistant.status = 'error';
+    return;
+  }
+
+  // Final answer streaming chunk
+  if (data.chunk) {
     assistant.status = 'loading';
     assistant.content += data.chunk;
+    return;
+  }
+
+  // Agent reasoning event
+  if (!assistant.agentSteps) assistant.agentSteps = [];
+
+  if (data.type === 'agent_state') {
+    assistant.status = 'loading';
+    assistant.currentAgentState = data.state;
+    // Create a new step whenever a THINKING round starts
+    if (data.state === 'THINKING' && data.iteration > 0) {
+      const exists = assistant.agentSteps.some((s: Api.Chat.AgentStep) => s.iteration === data.iteration);
+      if (!exists) assistant.agentSteps.push({ iteration: data.iteration });
+    }
+  } else if (data.type === 'thought') {
+    assistant.status = 'loading';
+    const last = assistant.agentSteps.at(-1) as Api.Chat.AgentStep | undefined;
+    if (last) last.thought = data.content;
+  } else if (data.type === 'action') {
+    assistant.status = 'loading';
+    const last = assistant.agentSteps.at(-1) as Api.Chat.AgentStep | undefined;
+    if (last) { last.action = data.tool; last.actionInput = data.input; }
+  } else if (data.type === 'observation') {
+    assistant.status = 'loading';
+    const last = assistant.agentSteps.at(-1) as Api.Chat.AgentStep | undefined;
+    if (last) last.observation = data.content;
   }
 });
 
 const handleSend = async () => {
-  //  判断是否正在发送, 如果发送中，则停止ai继续响应
+  // Stop the current AI response if one is in progress
   if (isSending.value) {
     const { error, data } = await request<Api.Chat.Token>({ url: 'chat/websocket-token', baseURL: 'proxy-api' });
     if (error) return;
@@ -56,25 +93,25 @@ const handleSend = async () => {
 };
 
 const inputRef = ref();
-// 手动插入换行符（确保所有浏览器兼容）
+// Insert a newline manually for consistent browser behavior
 const insertNewline = () => {
   const textarea = inputRef.value;
   const start = textarea.selectionStart;
   const end = textarea.selectionEnd;
 
-  // 在光标位置插入换行符
+  // Insert a newline at the cursor position
   input.value.message = `${input.value.message.substring(0, start)}\n${input.value.message.substring(end)}`;
 
-  // 更新光标位置（在插入的换行符之后）
+  // Move the cursor after the inserted newline
   nextTick(() => {
     textarea.selectionStart = start + 1;
     textarea.selectionEnd = start + 1;
-    textarea.focus(); // 确保保持焦点
+    textarea.focus(); // Keep focus in the textarea
   });
 };
 
-// ctrl + enter 换行
-// enter 发送
+// Ctrl + Enter inserts a newline
+// Enter sends the message
 const handShortcut = (e: KeyboardEvent) => {
   if (e.key === 'Enter') {
     e.preventDefault();
@@ -91,13 +128,13 @@ const handShortcut = (e: KeyboardEvent) => {
     <textarea
       ref="inputRef"
       v-model.trim="input.message"
-      placeholder="给 Brain.ai 发送消息"
+      placeholder="Message Brain.ai"
       class="min-h-10 w-full cursor-text resize-none b-none bg-transparent color-#333 caret-[rgb(var(--primary-color))] outline-none dark:color-#f1f1f1"
       @keydown="handShortcut"
     />
     <div class="flex items-center justify-between pt-2">
       <div class="flex items-center text-18px color-gray-500">
-        <NText class="text-14px">连接状态：</NText>
+        <NText class="text-14px">Connection:</NText>
         <icon-eos-icons:loading v-if="wsStatus === 'CONNECTING'" class="color-yellow" />
         <icon-fluent:plug-connected-checkmark-20-filled v-else-if="wsStatus === 'OPEN'" class="color-green" />
         <icon-tabler:plug-connected-x v-else class="color-red" />

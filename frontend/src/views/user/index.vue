@@ -19,17 +19,17 @@ const { columns, columnChecks, data, getData, loading, mobilePagination, searchP
   columns: () => [
     {
       key: 'index',
-      title: '序号',
+      title: 'No.',
       width: 64
     },
     {
       key: 'username',
-      title: '用户名',
+      title: 'Username',
       minWidth: 100
     },
     {
       key: 'orgTags',
-      title: '标签',
+      title: 'Tags',
       render: row => (
         <div class="flex flex-wrap gap-2">
           {row.orgTags.map(tag => (
@@ -42,34 +42,34 @@ const { columns, columnChecks, data, getData, loading, mobilePagination, searchP
     },
     {
       key: 'email',
-      title: '邮箱',
+      title: 'Email',
       width: 200
     },
     {
       key: 'status',
-      title: '是否启用',
+      title: 'Status',
       width: 100,
-      render: row => <NTag type={row.status ? 'success' : 'warning'}>{row.status ? '已启用' : '已禁用'}</NTag>
+      render: row => <NTag type={row.status ? 'success' : 'warning'}>{row.status ? 'Enabled' : 'Disabled'}</NTag>
     },
     {
       key: 'createTime',
-      title: '创建时间',
+      title: 'Created At',
       width: 200,
       render: row => dayjs(row.createTime).format('YYYY-MM-DD HH:mm:ss')
     },
     {
       key: 'lastLoginTime',
-      title: '最后登录时间',
+      title: 'Last Login',
       width: 200,
       render: row => dayjs(row.lastLoginTime).format('YYYY-MM-DD HH:mm:ss')
     },
     {
       key: 'operate',
-      title: '操作',
+      title: 'Actions',
       width: 130,
       render: row => (
         <NButton type="primary" ghost size="small" onClick={() => handleOrgTag(row)}>
-          分配组织标签
+          Assign Tags
         </NButton>
       )
     }
@@ -87,7 +87,7 @@ function handleOrgTag(row: Api.User.Item) {
 //   loading.value = true;
 //   const { error } = await request({ url: 'users/primary-org', method: 'PUT', data: { primaryOrg, userId } });
 //   if (!error) {
-//     window.$message?.success('操作成功');
+//     window.$message?.success('Operation successful');
 //     await getData();
 //   }
 //   loading.value = false;
@@ -99,7 +99,7 @@ function handleOrgTag(row: Api.User.Item) {
     <Teleport defer to="#header-extra">
       <UserSearch v-model:model="searchParams" @reset="resetSearchParams" @search="getData" />
     </Teleport>
-    <NCard title="用户列表" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
+    <NCard title="Users" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
       <template #header-extra>
         <TableHeaderOperation v-model:columns="columnChecks" :addable="false" :loading="loading" @refresh="getData" />
       </template>

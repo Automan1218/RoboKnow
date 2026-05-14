@@ -39,7 +39,7 @@ export const useKnowledgeBaseStore = defineStore(SetupStoreId.KnowledgeBase, () 
 
     if (error) return false;
 
-    // 更新任务状态
+    // Update task state
     const updatedTask = tasks.value.find(t => t.fileMd5 === task.fileMd5)!;
     updatedTask.uploadedChunks = data.uploaded;
     updatedTask.progress = Number.parseFloat(data.progress.toFixed(2));
@@ -60,7 +60,7 @@ export const useKnowledgeBaseStore = defineStore(SetupStoreId.KnowledgeBase, () 
       });
       if (error) return false;
 
-      // 更新任务状态为已完成
+      // Mark task as completed
       const index = tasks.value.findIndex(t => t.fileMd5 === task.fileMd5);
       tasks.value[index].status = UploadStatus.Completed;
       return true;
@@ -70,28 +70,28 @@ export const useKnowledgeBaseStore = defineStore(SetupStoreId.KnowledgeBase, () 
   }
 
   /**
-   * 异步函数：将上传请求加入队列
+   * Add an upload request to the queue.
    *
-   * 本函数处理上传任务的排队和初始化工作它首先检查是否存在相同的文件， 如果不存在，则创建一个新的上传任务，并将其添加到任务队列中最后启动上传流程
+   * This handles upload queuing and initialization. It reuses an existing matching task when possible,
+   * otherwise creates a new task and starts the upload flow.
    *
-   * @param form 包含上传信息的表单，包括文件列表和是否公开的标签
-   * @returns 返回一个上传任务对象，无论是已存在的还是新创建的
+   * @param form Upload form data, including files and visibility settings.
    */
   async function enqueueUpload(form: Api.KnowledgeBase.Form) {
-    // 获取文件列表中的第一个文件
+    // Use the first file in the list
     const file = form.fileList![0].file!;
-    // 计算文件的MD5值，用于唯一标识文件
+    // Calculate the MD5 value as the unique file identifier
     const md5 = await calculateMD5(file);
 
-    // 检查是否已存在相同文件
+    // Check whether the same file already exists
     const existingTask = tasks.value.find(t => t.fileMd5 === md5);
     if (existingTask) {
-      // 如果存在相同文件，直接返回该上传任务
+      // Reuse the existing matching task
       if (existingTask.status === UploadStatus.Completed) {
-        window.$message?.error('文件已存在');
+        window.$message?.error('File already exists');
         return;
       } else if (existingTask.status === UploadStatus.Pending || existingTask.status === UploadStatus.Uploading) {
-        window.$message?.error('文件正在上传中');
+        window.$message?.error('File is already uploading');
         return;
       } else if (existingTask.status === UploadStatus.Break) {
         existingTask.status = UploadStatus.Pending;
@@ -100,7 +100,7 @@ export const useKnowledgeBaseStore = defineStore(SetupStoreId.KnowledgeBase, () 
       }
     }
 
-    // 创建新的上传任务对象
+    // Create a new upload task
     const newTask: Api.KnowledgeBase.UploadTask = {
       file,
       chunk: null,
@@ -108,6 +108,7 @@ export const useKnowledgeBaseStore = defineStore(SetupStoreId.KnowledgeBase, () 
       fileMd5: md5,
       fileName: file.name,
       totalSize: file.size,
+      public: form.isPublic,
       isPublic: form.isPublic,
       uploadedChunks: [],
       progress: 0,
@@ -117,60 +118,60 @@ export const useKnowledgeBaseStore = defineStore(SetupStoreId.KnowledgeBase, () 
 
     newTask.orgTagName = form.orgTagName ?? null;
 
-    // 将新的上传任务添加到任务队列中
+    // Add the new task to the queue
     tasks.value.push(newTask);
-    // 启动上传流程
+    // Start the upload flow
     startUpload();
-    // 返回新的上传任务
+    // The new task is now queued
   }
 
-  /** 启动文件上传的异步函数 该函数负责从待上传队列中启动文件上传任务，并管理并发上传的数量 */
+  /** Start upload tasks from the pending queue and limit concurrency. */
   async function startUpload() {
-    // 限制可同时上传的文件个数
+    // Limit concurrent uploads
     if (activeUploads.value.size >= 3) return;
-    // 获取待上传的文件
+    // Get pending files
     const pendingTasks = tasks.value.filter(
       t => t.status === UploadStatus.Pending && !activeUploads.value.has(t.fileMd5)
     );
 
-    // 如果没有待上传的文件，则直接返回
+    // Return when nothing is pending
     if (pendingTasks.length === 0) return;
 
-    // 获取第一个待上传的文件
+    // Pick the first pending file
     const task = pendingTasks[0];
     task.status = UploadStatus.Uploading;
     activeUploads.value.add(task.fileMd5);
 
-    // 计算文件总片数
+    // Calculate total chunk count
     const totalChunks = Math.ceil(task.totalSize / chunkSize);
 
     try {
       if (task.uploadedChunks.length === totalChunks) {
         const success = await mergeFile(task);
-        if (!success) throw new Error('文件合并失败');
+        if (!success) throw new Error('File merge failed');
       }
       // const promises = [];
-      // 遍历所有片数
+      // Iterate through all chunks
       for (let i = 0; i < totalChunks; i += 1) {
-        // 如果未上传，则上传
+        // Upload chunks that have not been uploaded
         if (!task.uploadedChunks.includes(i)) {
           task.chunkIndex = i;
           // promises.push(uploadChunk(task))
           // eslint-disable-next-line no-await-in-loop
           const success = await uploadChunk(task);
-          if (!success) throw new Error('分片上传失败');
+          if (!success) throw new Error('Chunk upload failed');
         }
       }
       // await Promise.all(promises)
     } catch (e) {
       console.error('%c [ 👉 upload error 👈 ]-168', 'font-size:16px; background:#94cc97; color:#d8ffdb;', e);
-      // 如果上传失败，则将任务状态设置为中断
+      // Mark the task as interrupted when upload fails
       const index = tasks.value.findIndex(t => t.fileMd5 === task.fileMd5);
       tasks.value[index].status = UploadStatus.Break;
     } finally {
-      // 无论成功或失败，都从活跃队列中移除
+      // Always remove the task from the active queue
       activeUploads.value.delete(task.fileMd5);
-      // 继续下一个任务
+      // Continue with the next task
       startUpload();
     }
   }

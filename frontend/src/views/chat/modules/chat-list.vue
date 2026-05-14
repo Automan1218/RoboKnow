@@ -60,7 +60,7 @@ onMounted(() => {
       <Teleport defer to="#header-extra">
         <div class="px-10">
           <NForm :model="params" label-placement="left" :show-feedback="false" inline>
-            <NFormItem label="时间">
+            <NFormItem label="Date">
               <NDatePicker v-model:value="range" type="daterange" />
             </NFormItem>
           </NForm>

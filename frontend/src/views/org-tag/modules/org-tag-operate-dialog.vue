@@ -21,9 +21,9 @@ const { defaultRequiredRule } = useFormRules();
 
 const title = computed(() => {
   const titles: Record<NaiveUI.TableOperateType, string> = {
-    add: '新增',
-    edit: '编辑',
-    addChild: '新增下级'
+    add: 'Add',
+    edit: 'Edit',
+    addChild: 'Add Child'
   };
   return titles[props.operateType];
 });
@@ -46,7 +46,7 @@ const rules = ref<FormRules>({
       validator(_, value) {
         return !value.startsWith('PRIVATE_');
       },
-      message: '标签Id不能以PRIVATE_开头',
+      message: 'Tag ID cannot start with PRIVATE_',
       trigger: 'blur'
     }
   ],
@@ -73,7 +73,7 @@ async function handleSubmit() {
     res = await request({ url: `/admin/org-tags/${model.value.tagId}`, method: 'PUT', data: model.value });
   else res = await request({ url: '/admin/org-tags', method: 'POST', data: model.value });
   if (!res.error) {
-    window.$message?.success('操作成功');
+    window.$message?.success('Operation successful');
     close();
     emit('submitted');
   }
@@ -99,20 +99,20 @@ watch(visible, () => {
     @positive-click="handleSubmit"
   >
     <NForm ref="formRef" :model="model" :rules="rules" label-placement="left" :label-width="100" mt-10>
-      <NFormItem label="标签Id" path="tagId">
-        <NInput v-model:value="model.tagId" placeholder="请输入标签Id" maxlength="60" />
+      <NFormItem label="Tag ID" path="tagId">
+        <NInput v-model:value="model.tagId" placeholder="Enter tag ID" maxlength="60" />
       </NFormItem>
-      <NFormItem label="标签名称" path="name">
-        <NInput v-model:value="model.name" placeholder="请输入标签名称" maxlength="60" />
+      <NFormItem label="Tag Name" path="name">
+        <NInput v-model:value="model.name" placeholder="Enter tag name" maxlength="60" />
       </NFormItem>
-      <NFormItem label="所属标签" path="parentTag">
+      <NFormItem label="Parent Tag" path="parentTag">
         <OrgTagCascader v-model:value="model.parentTag" :options="data" />
       </NFormItem>
-      <NFormItem label="标签描述" path="description">
+      <NFormItem label="Description" path="description">
         <NInput
           v-model:value="model.description"
           type="textarea"
-          placeholder="请输入标签描述"
+          placeholder="Enter tag description"
           maxlength="300"
           clearable
           show-count
@@ -122,8 +122,8 @@ watch(visible, () => {
     </NForm>
     <template #action>
       <NSpace :size="16">
-        <NButton @click="close">取消</NButton>
-        <NButton type="primary" @click="handleSubmit">保存</NButton>
+        <NButton @click="close">Cancel</NButton>
+        <NButton type="primary" @click="handleSubmit">Save</NButton>
       </NSpace>
     </template>
   </NModal>

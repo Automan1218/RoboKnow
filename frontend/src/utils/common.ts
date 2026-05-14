@@ -58,7 +58,7 @@ export function toggleHtmlClass(className: string) {
   };
 }
 
-// 文件大小转换，根据文件大小转换为K、M、G
+// Convert file size to K, M, or G units
 export function fileSize(size: number) {
   if (size < 1024 * 1024) {
     return `${(size / 1024).toFixed(2)}K`;
@@ -96,7 +96,7 @@ export async function calculateMD5(file: File): Promise<string> {
       loadNext();
     };
 
-    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.onerror = () => reject(new Error('File read failed'));
     loadNext();
   });
 }
@@ -106,7 +106,7 @@ export function formatDate(date: string | number | null | undefined, format = 'Y
   return dayjs(date).format(format);
 }
 
-// 获取文件扩展名
+// Get file extension
 export function getFileExt(fileName: string) {
   if (!fileName) return '';
   return fileName.split('.').pop();

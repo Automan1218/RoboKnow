@@ -52,11 +52,11 @@ export const useAppStore = defineStore(SetupStoreId.App, () => {
     }
   }
 
-  const locale = ref<App.I18n.LangType>(localStg.get('lang') || 'zh-CN');
+  const locale = ref<App.I18n.LangType>(localStg.get('lang') || 'en-US');
 
   const localeOptions: App.I18n.LangOption[] = [
     {
-      label: '中文',
+      label: 'Chinese',
       key: 'zh-CN'
     },
     {

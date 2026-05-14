@@ -5,9 +5,11 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.reactive.function.client.WebClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.function.Consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -135,6 +137,49 @@ public class DeepSeekClient {
         return messages;
     }
     
+    /**
+     * 同步阻塞调用（非流式），用于 ReAct 中间推理步骤。
+     * 使用 stream:false，直接返回完整响应文本。
+     */
+    public String chatBlocking(List<Map<String, String>> messages) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("model", model);
+        request.put("messages", messages);
+        request.put("stream", false);
+
+        AiProperties.Generation gen = aiProperties.getGeneration();
+        if (gen.getTemperature() != null) request.put("temperature", gen.getTemperature());
+        if (gen.getTopP() != null)         request.put("top_p", gen.getTopP());
+        if (gen.getMaxTokens() != null)    request.put("max_tokens", gen.getMaxTokens());
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = webClient.post()
+                    .uri("/chat/completions")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block(Duration.ofSeconds(60));
+
+            if (response == null) return "";
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
+            if (choices == null || choices.isEmpty()) return "";
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+            if (message == null) return "";
+
+            Object content = message.get("content");
+            return content == null ? "" : content.toString();
+        } catch (Exception e) {
+            logger.error("chatBlocking 调用失败: {}", e.getMessage(), e);
+            return "";
+        }
+    }
+
     private void processChunk(String chunk, Consumer<String> onChunk) {
         try {
             // 检查是否是结束标记

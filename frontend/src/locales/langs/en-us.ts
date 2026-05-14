@@ -208,8 +208,8 @@ const local: App.I18n.Schema = {
       register: {
         title: 'Register',
         agreement: 'I have read and agree to',
-        protocol: '《User Agreement》',
-        policy: '《Privacy Policy》'
+        protocol: 'User Agreement',
+        policy: 'Privacy Policy'
       },
       resetPwd: {
         title: 'Reset Password'

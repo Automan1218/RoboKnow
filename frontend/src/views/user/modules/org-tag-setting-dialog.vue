@@ -36,7 +36,7 @@ const privateOrgTag = ref<string[]>([]);
 async function handleUpdateModelWhenEdit() {
   model.value = createDefaultModel();
   model.value.orgTags = props.rowData.orgTags.map(tag => tag.tagId!);
-  // 备份默认的私人组织标签，防止被误删
+  // Keep private organization tags so they cannot be removed by mistake
   privateOrgTag.value = props.rowData.orgTags.filter(tag => tag.tagId!.startsWith('PRIVATE_')).map(tag => tag.tagId!);
 }
 
@@ -54,7 +54,7 @@ async function handleSubmit() {
     data: model.value
   });
   if (!res.error) {
-    window.$message?.success('操作成功');
+    window.$message?.success('Operation successful');
     close();
     emit('submitted');
   }
@@ -73,24 +73,24 @@ watch(visible, () => {
   <NModal
     v-model:show="visible"
     preset="dialog"
-    title="组织标签设置"
+    title="Organization Tag Settings"
     :show-icon="false"
     :mask-closable="false"
     class="w-500px!"
     @positive-click="handleSubmit"
   >
     <NForm ref="formRef" :model="model" :rules="rules" label-placement="left" :label-width="100" mt-10>
-      <NFormItem label="用户名" path="username">
+      <NFormItem label="Username" path="username">
         <NInput :value="rowData.username" readonly />
       </NFormItem>
-      <NFormItem label="组织标签" path="orgTags">
+      <NFormItem label="Organization Tags" path="orgTags">
         <OrgTagCascader v-model:value="model.orgTags" multiple exclude-private />
       </NFormItem>
     </NForm>
     <template #action>
       <NSpace :size="16">
-        <NButton @click="close">取消</NButton>
-        <NButton type="primary" @click="handleSubmit">保存</NButton>
+        <NButton @click="close">Cancel</NButton>
+        <NButton type="primary" @click="handleSubmit">Save</NButton>
       </NSpace>
     </template>
   </NModal>

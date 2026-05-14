@@ -55,10 +55,10 @@ function createCommonRequest<ResponseData = any>(
 
   instance.interceptors.response.use(
     async response => {
-      // 检查响应头中的新token（无感知刷新机制）
+      // Check for a refreshed token in response headers.
       const newToken = response.headers['new-token'];
       if (newToken) {
-        // 调用更新token的回调函数（如果提供了的话）
+        // Call the token update callback when provided.
         await opts.onTokenRefresh?.(newToken);
       }
 

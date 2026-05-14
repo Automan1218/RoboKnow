@@ -26,7 +26,7 @@ function getFlatRequest(options: Partial<RequestOption<App.Service.Response>> = 
         return config;
       },
       onTokenRefresh(newToken) {
-        // 无感知token刷新：自动更新本地存储的token
+        // Silent token refresh: update the token in local storage automatically
         const authStore = useAuthStore();
         authStore.setToken(newToken);
         console.log('🔄 Token automatically refreshed');
@@ -146,7 +146,7 @@ function getFlatRequest(options: Partial<RequestOption<App.Service.Response>> = 
 
 export const request = getFlatRequest();
 
-// 某些接口不是分页接口，但是需要当作套用分页的页面，故需要对数据结构做转换
+// Some APIs are not paginated but need to be adapted for paginated pages.
 export const fakePaginationRequest = getFlatRequest({
   transformBackendResponse(response) {
     return { data: response.data.data };

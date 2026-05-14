@@ -14,7 +14,7 @@ wss.on('connection', ws => {
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       for (let i = 0; i < 5; i += 1) {
-        const randomLength = Math.floor(Math.random() * 41) + 10; // 10-50之间的随机数
+        const randomLength = Math.floor(Math.random() * 41) + 10; // Random number from 10 to 50
         const randomText = Array(randomLength)
           .fill()
           .map(() => {
@@ -22,7 +22,7 @@ wss.on('connection', ws => {
           })
           .join('');
 
-        const delay = Math.random() * 3000; // 0-3秒的随机延迟
+        const delay = Math.random() * 3000; // Random delay from 0 to 3 seconds
         setTimeout(() => {
           client.send(randomText);
         }, delay);

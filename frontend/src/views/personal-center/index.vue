@@ -73,7 +73,7 @@ const setPrimaryOrg = async () => {
               <div class="flex items-center justify-between">
                 <div>{{ tag.name }}</div>
                 <NTag v-if="tag.tagId === tags.primaryOrg" type="primary" size="small">
-                  主标签
+                  Primary
                   <template #icon>
                     <icon-solar:verified-check-bold-duotone class="text-icon" />
                   </template>
@@ -91,10 +91,10 @@ const setPrimaryOrg = async () => {
         v-model:show="visible"
         :loading="submitLoading"
         preset="dialog"
-        title="设置主标签"
-        content="确定将当前标签设置为主标签吗？"
-        positive-text="确认"
-        negative-text="取消"
+        title="Set Primary Tag"
+        content="Set this tag as your primary tag?"
+        positive-text="Confirm"
+        negative-text="Cancel"
         @positive-click="setPrimaryOrg"
         @negative-click="visible = false"
       />

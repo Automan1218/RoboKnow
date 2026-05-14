@@ -60,7 +60,7 @@ async function getList() {
     <Teleport defer to="#header-extra">
       <div class="px-10">
         <NForm :model="params" label-placement="left" :show-feedback="false" inline>
-          <NFormItem label="用户">
+          <NFormItem label="User">
             <TheSelect
               v-model:value="userId"
               url="admin/users/list"
@@ -72,7 +72,7 @@ async function getList() {
               :clearable="false"
             />
           </NFormItem>
-          <NFormItem label="时间">
+          <NFormItem label="Date">
             <NDatePicker v-model:value="range" type="daterange" class="clear" />
           </NFormItem>
         </NForm>
@@ -83,7 +83,7 @@ async function getList() {
         <VueMarkdownItProvider>
           <ChatMessage v-for="(item, index) in list" :key="index" :msg="item" />
         </VueMarkdownItProvider>
-        <NEmpty v-if="!list.length" description="暂无数据" class="mt-60" />
+        <NEmpty v-if="!list.length" description="No data" class="mt-60" />
       </NSpin>
     </NScrollbar>
   </div>

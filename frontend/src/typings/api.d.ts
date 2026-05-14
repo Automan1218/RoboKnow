@@ -123,7 +123,7 @@ declare namespace Api {
 
     interface UploadState {
       tasks: UploadTask[];
-      activeUploads: Set<string>; // 当前正在上传的任务ID
+      activeUploads: Set<string>; // Currently active upload task IDs
     }
 
     interface Form {
@@ -149,7 +149,7 @@ declare namespace Api {
       status: UploadStatus;
       createdAt?: string;
       mergedAt?: string;
-      requestIds?: string[]; // 请求ID，用于取消上传
+      requestIds?: string[]; // Request IDs used to cancel uploads
     }
     type List = Common.PaginatingQueryRecord<UploadTask>;
 
@@ -181,11 +181,24 @@ declare namespace Api {
       conversationId: string;
     }
 
+    /** Single ReAct reasoning step */
+    interface AgentStep {
+      iteration: number;
+      thought?: string;
+      action?: string;
+      actionInput?: string;
+      observation?: string;
+    }
+
     interface Message {
       role: 'user' | 'assistant';
       content: string;
       status?: 'pending' | 'loading' | 'finished' | 'error';
       timestamp?: string;
+      /** ReAct reasoning step list */
+      agentSteps?: AgentStep[];
+      /** Current agent state, updated while streaming */
+      currentAgentState?: 'THINKING' | 'ACTING' | 'OBSERVING' | 'ANSWERING' | 'FINISHED';
     }
 
     interface Token {

@@ -59,17 +59,17 @@ function onUpdate(option: unknown) {
   <NModal
     v-model:show="visible"
     preset="dialog"
-    title="文件上传"
+    title="Upload File"
     :show-icon="false"
     :mask-closable="false"
     class="w-500px!"
     @positive-click="handleSubmit"
   >
     <NForm ref="formRef" :model="model" :rules="rules" label-placement="left" :label-width="100" mt-10>
-      <NFormItem v-if="authStore.isAdmin" label="组织标签" path="orgTag">
+      <NFormItem v-if="authStore.isAdmin" label="Organization Tag" path="orgTag">
         <OrgTagCascader v-model:value="model.orgTag" @change="onUpdate" />
       </NFormItem>
-      <NFormItem v-else label="组织标签" path="orgTag">
+      <NFormItem v-else label="Organization Tag" path="orgTag">
         <TheSelect
           v-model:value="model.orgTag"
           url="/users/org-tags"
@@ -80,15 +80,15 @@ function onUpdate(option: unknown) {
         />
       </NFormItem>
 
-      <NFormItem label="是否公开" path="isPublic">
+      <NFormItem label="Visibility" path="isPublic">
         <NRadioGroup v-model:value="model.isPublic" name="radiogroup">
           <NSpace :size="16">
-            <NRadio :value="true">公开</NRadio>
-            <NRadio :value="false">私有</NRadio>
+            <NRadio :value="true">Public</NRadio>
+            <NRadio :value="false">Private</NRadio>
           </NSpace>
         </NRadioGroup>
       </NFormItem>
-      <NFormItem label="标签描述" path="fileList">
+      <NFormItem label="File" path="fileList">
         <NUpload
           v-model:file-list="model.fileList"
           :accept="uploadAccept"
@@ -96,14 +96,14 @@ function onUpdate(option: unknown) {
           :multiple="false"
           :default-upload="false"
         >
-          <NButton>上传文件</NButton>
+          <NButton>Upload File</NButton>
         </NUpload>
       </NFormItem>
     </NForm>
     <template #action>
       <NSpace :size="16">
-        <NButton @click="close">取消</NButton>
-        <NButton type="primary" @click="handleSubmit">保存</NButton>
+        <NButton @click="close">Cancel</NButton>
+        <NButton type="primary" @click="handleSubmit">Save</NButton>
       </NSpace>
     </template>
   </NModal>

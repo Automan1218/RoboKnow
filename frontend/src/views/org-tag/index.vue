@@ -9,7 +9,7 @@ const { columns, columnChecks, data, loading, getData } = useTable({
   columns: () => [
     {
       key: 'name',
-      title: '标签名称',
+      title: 'Tag Name',
       width: 300,
       ellipsis: {
         tooltip: true
@@ -17,7 +17,7 @@ const { columns, columnChecks, data, loading, getData } = useTable({
     },
     {
       key: 'description',
-      title: '描述',
+      title: 'Description',
       minWidth: 200,
       ellipsis: {
         tooltip: true
@@ -25,22 +25,22 @@ const { columns, columnChecks, data, loading, getData } = useTable({
     },
     {
       key: 'operate',
-      title: '操作',
+      title: 'Actions',
       width: 240,
       render: row => (
         <div class="flex gap-2">
           <NButton type="success" ghost size="small" onClick={() => addChild(row)}>
-            新增下级
+            Add Child
           </NButton>
           <NButton type="primary" ghost size="small" onClick={() => edit(row)}>
-            编辑
+            Edit
           </NButton>
           <NPopconfirm onPositiveClick={() => handleDelete(row.tagId!)}>
             {{
-              default: () => '确认删除当前标签吗？',
+              default: () => 'Delete this tag?',
               trigger: () => (
                 <NButton type="error" ghost size="small">
-                  删除
+                  Delete
                 </NButton>
               )
             }}
@@ -81,7 +81,7 @@ async function handleDelete(tagId: string) {
 
 <template>
   <div class="flex-col-stretch gap-16px overflow-hidden <sm:overflow-auto">
-    <NCard title="组织标签" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
+    <NCard title="Organization Tags" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
       <template #header-extra>
         <TableHeaderOperation v-model:columns="columnChecks" :loading="loading" @add="handleAdd" @refresh="getData" />
       </template>

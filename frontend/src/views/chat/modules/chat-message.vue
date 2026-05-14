@@ -3,6 +3,7 @@
 import { nextTick } from 'vue';
 import { VueMarkdownIt } from 'vue-markdown-shiki';
 import { formatDate } from '@/utils/common';
+import AgentReasoning from './agent-reasoning.vue';
 defineOptions({ name: 'ChatMessage' });
 
 const props = defineProps<{ msg: Api.Chat.Message }>();
@@ -11,32 +12,32 @@ const authStore = useAuthStore();
 
 function handleCopy(content: string) {
   navigator.clipboard.writeText(content);
-  window.$message?.success('已复制');
+  window.$message?.success('Copied');
 }
 
 const chatStore = useChatStore();
 
-// 存储文件名和对应的事件处理
+// Store source file names for click handling
 const sourceFiles = ref<Array<{fileName: string, id: string}>>([]);
 
-// 处理来源文件链接的函数
+// Render source file links
 function processSourceLinks(text: string): string {
-  // 匹配 (来源#数字: 文件名) 的正则表达式
-  const sourcePattern = /\(来源#(\d+):\s*([^)]+)\)/g;
+  // Match "(Source#number: file name)" and the legacy Chinese marker returned by the backend.
+  const sourcePattern = /\((?:\u6765\u6e90|Source)#(\d+):\s*([^)]+)\)/g;
 
   return text.replace(sourcePattern, (_match, sourceNum, fileName) => {
-    // 为文件名创建可点击的链接
+    // Create a clickable link for the file name
     const linkClass = 'source-file-link';
     const encodedFileName = encodeURIComponent(fileName.trim());
     const fileId = `source-file-${sourceFiles.value.length}`;
 
-    // 存储文件信息
+    // Store file information
     sourceFiles.value.push({
       fileName: encodedFileName,
       id: fileId
     });
 
-    return `(来源#${sourceNum}: <span class="${linkClass}" data-file-id="${fileId}">${fileName}</span>)`;
+    return `(Source #${sourceNum}: <span class="${linkClass}" data-file-id="${fileId}">${fileName}</span>)`;
   });
 }
 
@@ -44,7 +45,7 @@ const content = computed(() => {
   chatStore.scrollToBottom?.();
   const rawContent = props.msg.content ?? '';
 
-  // 只对助手消息处理来源链接
+  // Only process source links for assistant messages
   if (props.msg.role === 'assistant') {
     return processSourceLinks(rawContent);
   }
@@ -52,11 +53,11 @@ const content = computed(() => {
   return rawContent;
 });
 
-// 处理内容点击事件（事件委托）
+// Handle content clicks with event delegation
 function handleContentClick(event: MouseEvent) {
   const target = event.target as HTMLElement;
 
-  // 检查点击的是否是文件链接
+  // Check whether the clicked target is a file link
   if (target.classList.contains('source-file-link')) {
     const fileId = target.getAttribute('data-file-id');
     if (fileId) {
@@ -68,18 +69,18 @@ function handleContentClick(event: MouseEvent) {
   }
 }
 
-// 处理来源文件点击事件
+// Handle source file clicks
 async function handleSourceFileClick(fileName: string) {
   const decodedFileName = decodeURIComponent(fileName);
-  console.log('点击了来源文件:', decodedFileName);
+  console.log('Source file clicked:', decodedFileName);
 
   try {
-    window.$message?.loading(`正在获取文件下载链接: ${decodedFileName}`, {
+    window.$message?.loading(`Fetching download link: ${decodedFileName}`, {
       duration: 0,
       closable: false
     });
 
-    // 调用文件下载接口
+    // Call the file download API
     const { error, data } = await request<Api.Document.DownloadResponse>({
       url: 'documents/download',
       params: {
@@ -92,21 +93,21 @@ async function handleSourceFileClick(fileName: string) {
     window.$message?.destroyAll();
 
     if (error) {
-      window.$message?.error(`文件下载失败: ${error.response?.data?.message || '未知错误'}`);
+      window.$message?.error(`File download failed: ${error.response?.data?.message || 'Unknown error'}`);
       return;
     }
 
     if (data?.downloadUrl) {
-      // 在新窗口打开下载链接
+      // Open the download link in a new window
       window.open(data.downloadUrl, '_blank');
-      window.$message?.success(`文件下载链接已打开: ${decodedFileName}`);
+      window.$message?.success(`Download link opened: ${decodedFileName}`);
     } else {
-      window.$message?.error('未能获取到下载链接');
+      window.$message?.error('Could not get download link');
     }
   } catch (err) {
     window.$message?.destroyAll();
-    console.error('文件下载失败:', err);
-    window.$message?.error(`文件下载失败: ${decodedFileName}`);
+    console.error('File download failed:', err);
+    window.$message?.error(`File download failed: ${decodedFileName}`);
   }
 }
 </script>
@@ -134,9 +135,17 @@ async function handleSourceFileClick(fileName: string) {
     <NText v-if="msg.status === 'pending'">
       <icon-eos-icons:three-dots-loading class="ml-12 mt-2 text-8" />
     </NText>
-    <NText v-else-if="msg.status === 'error'" class="ml-12 mt-2 italic">服务器繁忙，请稍后再试</NText>
+    <NText v-else-if="msg.status === 'error'" class="ml-12 mt-2 italic">Server is busy. Please try again later.</NText>
     <div v-else-if="msg.role === 'assistant'" class="mt-2 pl-12" @click="handleContentClick">
-      <VueMarkdownIt :content="content" />
+      <!-- Reasoning chain -->
+      <AgentReasoning
+        v-if="msg.agentSteps && msg.agentSteps.length > 0"
+        :steps="msg.agentSteps"
+        :current-state="msg.currentAgentState"
+        :is-complete="msg.status === 'finished'"
+      />
+      <!-- Final answer -->
+      <VueMarkdownIt v-if="msg.content" :content="content" />
     </div>
     <NText v-else-if="msg.role === 'user'" class="ml-12 mt-2 text-4">{{ content }}</NText>
     <NDivider class="ml-12 w-[calc(100%-3rem)] mb-0! mt-2!" />

@@ -1,6 +1,6 @@
 <template>
   <div class="file-preview-container">
-    <!-- 预览头部 -->
+    <!-- Preview header -->
     <div class="preview-header">
       <div class="flex items-center gap-2">
         <SvgIcon :local-icon="getFileIcon(fileName)" class="text-16" />
@@ -11,7 +11,7 @@
           <template #icon>
             <icon-mdi-download />
           </template>
-          下载
+          Download
         </NButton>
         <NButton size="small" @click="closePreview">
           <template #icon>
@@ -21,7 +21,7 @@
       </div>
     </div>
     
-    <!-- 预览内容 -->
+    <!-- Preview content -->
     <div class="preview-content">
       <template v-if="loading">
         <div class="flex items-center justify-center h-full">
@@ -67,7 +67,7 @@ const downloading = ref(false);
 const content = ref('');
 const error = ref('');
 
-// 获取文件图标
+// Get file icon
 function getFileIcon(fileName: string) {
   const ext = getFileExt(fileName);
   if (ext) {
@@ -77,21 +77,21 @@ function getFileIcon(fileName: string) {
   return 'dflt';
 }
 
-// 监听文件名变化，加载预览内容
+// Reload preview content when the file name changes
 watch(() => props.fileName, async (newFileName) => {
   if (newFileName && props.visible) {
     await loadPreviewContent();
   }
 }, { immediate: true });
 
-// 监听可见性变化
+// Watch visibility changes
 watch(() => props.visible, async (visible) => {
   if (visible && props.fileName) {
     await loadPreviewContent();
   }
 });
 
-// 加载预览内容
+// Load preview content
 async function loadPreviewContent() {
   if (!props.fileName) return;
   
@@ -114,18 +114,18 @@ async function loadPreviewContent() {
     });
     
     if (requestError) {
-      error.value = '预览失败：' + (requestError.message || '未知错误');
+      error.value = `Preview failed: ${requestError.message || 'Unknown error'}`;
     } else if (data) {
       content.value = data.content;
     }
   } catch (err: any) {
-    error.value = '预览失败：' + (err.message || '网络错误');
+    error.value = `Preview failed: ${err.message || 'Network error'}`;
   } finally {
     loading.value = false;
   }
 }
 
-// 下载文件
+// Download file
 async function downloadFile() {
   if (!props.fileName) return;
   
@@ -146,25 +146,25 @@ async function downloadFile() {
     });
     
     if (requestError) {
-      window.$message?.error('下载失败：' + (requestError.message || '未知错误'));
+      window.$message?.error(`Download failed: ${requestError.message || 'Unknown error'}`);
     } else if (data) {
-      // 使用预签名URL下载文件
+      // Download the file with the presigned URL
       const link = document.createElement('a');
       link.href = data.downloadUrl;
       link.download = data.fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.$message?.success('开始下载文件');
+      window.$message?.success('File download started');
     }
   } catch (err: any) {
-    window.$message?.error('下载失败：' + (err.message || '网络错误'));
+    window.$message?.error(`Download failed: ${err.message || 'Network error'}`);
   } finally {
     downloading.value = false;
   }
 }
 
-// 关闭预览
+// Close preview
 function closePreview() {
   emit('close');
 }

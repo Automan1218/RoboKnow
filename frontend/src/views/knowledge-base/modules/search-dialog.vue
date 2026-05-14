@@ -59,7 +59,7 @@ watch(visible, () => {
   <NModal
     v-model:show="visible"
     preset="dialog"
-    title="知识库检索"
+    title="Knowledge Base Search"
     :show-icon="false"
     :mask-closable="false"
     class="w-1000px!"
@@ -77,15 +77,15 @@ watch(visible, () => {
         <NFormItemGi label="topK" path="topK" class="pr-24px" span="6">
           <NInputNumber
             v-model:value="model.topK"
-            placeholder="请输入topK"
+            placeholder="Enter topK"
             clearable
             :min="1"
             :precision="0"
             :step="10"
           />
         </NFormItemGi>
-        <NFormItemGi label="关键字" path="query" class="pr-24px" span="12">
-          <NInput v-model:value="model.query" placeholder="请输入关键字" clearable />
+        <NFormItemGi label="Keyword" path="query" class="pr-24px" span="12">
+          <NInput v-model:value="model.query" placeholder="Enter keyword" clearable />
         </NFormItemGi>
         <NFormItemGi span="6">
           <NSpace class="w-full" justify="end">
@@ -93,20 +93,20 @@ watch(visible, () => {
               <template #icon>
                 <icon-ic-round-refresh class="text-icon" />
               </template>
-              重置
+              Reset
             </NButton>
             <NButton type="primary" ghost @click="search">
               <template #icon>
                 <icon-ic-round-search class="text-icon" />
               </template>
-              搜索
+              Search
             </NButton>
           </NSpace>
         </NFormItemGi>
       </NGrid>
     </NForm>
     <NSpin :show="loading">
-      <NEmpty v-if="list.length === 0" description="暂无数据" class="py-100px" />
+      <NEmpty v-if="list.length === 0" description="No data" class="py-100px" />
       <NScrollbar v-else class="max-h-500px">
         <NCard
           v-for="(item, index) in list"
@@ -135,7 +135,7 @@ watch(visible, () => {
             </NTag>
           </div>
           <template #footer>
-            <span>来源：{{ item.fileName }}</span>
+            <span>Source: {{ item.fileName }}</span>
           </template>
         </NCard>
       </NScrollbar>

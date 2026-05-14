@@ -11,7 +11,7 @@ import SearchDialog from './modules/search-dialog.vue';
 
 const appStore = useAppStore();
 
-// 文件预览相关状态
+// File preview state
 const previewVisible = ref(false);
 const previewFileName = ref('');
 
@@ -28,13 +28,13 @@ function renderIcon(fileName: string) {
   return null;
 }
 
-// 处理文件预览
+// Open file preview
 function handleFilePreview(fileName: string) {
   previewFileName.value = fileName;
   previewVisible.value = true;
 }
 
-// 关闭文件预览
+// Close file preview
 function closeFilePreview() {
   previewVisible.value = false;
   previewFileName.value = '';
@@ -46,7 +46,7 @@ const { columns, columnChecks, data, getData, loading } = useTable({
   columns: () => [
     {
       key: 'fileName',
-      title: '文件名',
+      title: 'File Name',
       minWidth: 400,
       render: row => (
         <div class="flex items-center">
@@ -64,37 +64,37 @@ const { columns, columnChecks, data, getData, loading } = useTable({
     },
     {
       key: 'totalSize',
-      title: '文件大小',
+      title: 'File Size',
       width: 100,
       render: row => fileSize(row.totalSize)
     },
     {
       key: 'status',
-      title: '上传状态',
+      title: 'Upload Status',
       width: 100,
       render: row => renderStatus(row.status, row.progress)
     },
     {
       key: 'orgTagName',
-      title: '组织标签',
+      title: 'Organization Tag',
       width: 150,
       ellipsis: { tooltip: true, lineClamp: 2 }
     },
     {
       key: 'isPublic',
-      title: '是否公开',
+      title: 'Visibility',
       width: 100,
-      render: row => (row.public || row.isPublic ? <NTag type="success">公开</NTag> : <NTag type="warning">私有</NTag>)
+      render: row => (row.public || row.isPublic ? <NTag type="success">Public</NTag> : <NTag type="warning">Private</NTag>)
     },
     {
       key: 'createdAt',
-      title: '上传时间',
+      title: 'Uploaded At',
       width: 100,
       render: row => dayjs(row.createdAt).format('YYYY-MM-DD')
     },
     {
       key: 'operate',
-      title: '操作',
+      title: 'Actions',
       width: 180,
       render: row => (
         <div class="flex gap-4">
@@ -105,14 +105,14 @@ const { columns, columnChecks, data, getData, loading } = useTable({
             size="small"
             onClick={() => handleFilePreview(row.fileName)}
           >
-            预览
+            Preview
           </NButton>
           <NPopconfirm onPositiveClick={() => handleDelete(row.fileMd5)}>
             {{
-              default: () => '确认删除当前文件吗？',
+              default: () => 'Delete this file?',
               trigger: () => (
                 <NButton type="error" ghost size="small">
-                  删除
+                  Delete
                 </NButton>
               )
             }}
@@ -129,9 +129,9 @@ onMounted(async () => {
   await getList();
 });
 
-/** 异步获取列表函数 该函数主要用于更新或初始化上传任务列表 它首先调用getData函数获取数据，然后根据获取到的数据状态更新任务列表 */
+/** Fetch the latest list and sync upload task state. */
 async function getList() {
-  // 等待获取最新数据
+  // Fetch the latest data
   await getData();
 
   if (data.value.length === 0) {
@@ -139,21 +139,21 @@ async function getList() {
     return;
   }
 
-  // 遍历获取到的数据，以处理每个项目
+  // Sync each item into the task list
   data.value.forEach(item => {
-    // 检查项目状态是否为已完成
+    // Check whether the item is completed
     if (item.status === UploadStatus.Completed) {
-      // 查找任务列表中是否有匹配的文件MD5
+      // Find the matching file MD5 in the task list
       const index = tasks.value.findIndex(task => task.fileMd5 === item.fileMd5);
-      // 如果找到匹配项，则更新其状态
+      // Update the matched task state
       if (index !== -1) {
         tasks.value[index].status = UploadStatus.Completed;
       } else {
-        // 如果没有找到匹配项，则将该项目添加到任务列表中
+        // Add missing completed items to the task list
         tasks.value.push(item);
       }
     } else if (!tasks.value.some(task => task.fileMd5 === item.fileMd5)) {
-      // 如果项目状态不是已完成，并且任务列表中没有相同的文件MD5，则将该项目的状态设置为中断，并添加到任务列表中
+      // Mark unfinished items that are not already tracked as interrupted
       item.status = UploadStatus.Break;
       tasks.value.push(item);
     }
@@ -169,7 +169,7 @@ async function handleDelete(fileMd5: string) {
     });
   }
 
-  // 如果文件一个分片也没有上传完成，则直接删除
+  // If no chunk has been uploaded, remove the local task directly
   if (tasks.value[index].uploadedChunks && tasks.value[index].uploadedChunks.length === 0) {
     tasks.value.splice(index, 1);
     return;
@@ -178,39 +178,39 @@ async function handleDelete(fileMd5: string) {
   const { error } = await request({ url: `/documents/${fileMd5}`, method: 'DELETE' });
   if (!error) {
     tasks.value.splice(index, 1);
-    window.$message?.success('删除成功');
+    window.$message?.success('Deleted successfully');
     await getData();
   }
 }
 
-// #region 文件上传
+// #region File upload
 const uploadVisible = ref(false);
 function handleUpload() {
   uploadVisible.value = true;
 }
 // #endregion
 
-// #region 检索知识库
+// #region Knowledge base search
 const searchVisible = ref(false);
 function handleSearch() {
   searchVisible.value = true;
 }
 // #endregion
 
-// 渲染上传状态
+// Render upload status
 function renderStatus(status: UploadStatus, percentage: number) {
-  if (status === UploadStatus.Completed) return <NTag type="success">已完成</NTag>;
-  else if (status === UploadStatus.Break) return <NTag type="error">上传中断</NTag>;
+  if (status === UploadStatus.Completed) return <NTag type="success">Completed</NTag>;
+  else if (status === UploadStatus.Break) return <NTag type="error">Interrupted</NTag>;
   return <NProgress percentage={percentage} processing />;
 }
 
-// #region 文件续传
+// #region Resume upload
 function renderResumeUploadButton(row: Api.KnowledgeBase.UploadTask) {
   if (row.status === UploadStatus.Break) {
     if (row.file)
       return (
         <NButton type="primary" size="small" ghost onClick={() => resumeUpload(row)}>
-          续传
+          Resume
         </NButton>
       );
     return (
@@ -222,7 +222,7 @@ function renderResumeUploadButton(row: Api.KnowledgeBase.UploadTask) {
         class="w-fit"
       >
         <NButton type="primary" size="small" ghost>
-          续传
+          Resume
         </NButton>
       </NUpload>
     );
@@ -230,7 +230,7 @@ function renderResumeUploadButton(row: Api.KnowledgeBase.UploadTask) {
   return null;
 }
 
-// 任务列表存在文件，直接续传
+// Resume directly when the task has the original file
 function resumeUpload(row: Api.KnowledgeBase.UploadTask) {
   row.status = UploadStatus.Pending;
   store.startUpload();
@@ -242,7 +242,7 @@ async function onBeforeUpload(
 ) {
   const md5 = await calculateMD5(options.file.file!);
   if (md5 !== row.fileMd5) {
-    window.$message?.error('两次上传的文件不一致');
+    window.$message?.error('The selected file does not match the original upload');
     return false;
   }
   loading.value = true;
@@ -266,7 +266,7 @@ async function onBeforeUpload(
 
 <template>
   <div class="min-h-500px flex-col-stretch gap-16px overflow-hidden lt-sm:overflow-auto">
-    <NCard title="文件列表" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
+    <NCard title="Files" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
       <template #header-extra>
         <TableHeaderOperation v-model:columns="columnChecks" :loading="loading" @add="handleUpload" @refresh="getList">
           <template #prefix>
@@ -274,7 +274,7 @@ async function onBeforeUpload(
               <template #icon>
                 <icon-ic-round-search class="text-icon" />
               </template>
-              检索知识库
+              Search Knowledge Base
             </NButton>
           </template>
         </TableHeaderOperation>
@@ -296,8 +296,8 @@ async function onBeforeUpload(
     <UploadDialog v-model:visible="uploadVisible" />
     <SearchDialog v-model:visible="searchVisible" />
     
-    <!-- 文件预览弹窗 -->
-    <NModal v-model:show="previewVisible" preset="card" title="文件预览" style="width: 80%; max-width: 1000px;">
+    <!-- File preview modal -->
+    <NModal v-model:show="previewVisible" preset="card" title="File Preview" style="width: 80%; max-width: 1000px;">
       <FilePreview
         :file-name="previewFileName"
         :visible="previewVisible"

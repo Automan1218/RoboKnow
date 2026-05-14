@@ -36,7 +36,7 @@ async function handleSubmit() {
   loading.value = true;
   const { error } = await fetchRegister(model.username, model.password);
   if (!error) {
-    window.$message?.success('注册成功');
+    window.$message?.success('Registration successful');
     toggleLoginModule('pwd-login');
   }
   loading.value = false;
@@ -86,10 +86,10 @@ async function handleSubmit() {
     </NSpace>
 
     <div class="mt-4 text-center">
-      注册即代表已阅读并同意我们的
-      <NButton text type="primary">用户协议</NButton>
-      和
-      <NButton text type="primary">隐私政策</NButton>
+      By registering, you agree to our
+      <NButton text type="primary">User Agreement</NButton>
+      and
+      <NButton text type="primary">Privacy Policy</NButton>
     </div>
   </NForm>
 </template>
