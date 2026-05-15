@@ -87,24 +87,40 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
-      elasticsearch:
-        image: elasticsearch:8.10.4
-        env:
-          ELASTIC_PASSWORD: PaiSmart2025
-          discovery.type: 'single-node'
-          xpack.security.enabled: 'true'
-          xpack.security.http.ssl.enabled: 'false'
-          ES_JAVA_OPTS: -Xms1g -Xmx1g
-        ports:
-          - 9200:9200
-        options: >-
-          --health-cmd="curl -fsS -u elastic:PaiSmart2025 http://localhost:9200/_cluster/health || exit 1"
-          --health-interval=15s
-          --health-timeout=10s
-          --health-retries=20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Build Elasticsearch image with IK analyzer
+        run: docker build -t paismart-es-ik:8.10.4 docker/elasticsearch-ik
+
+      - name: Start Elasticsearch with IK analyzer
+        run: >
+          docker run -d
+          --name paismart-es
+          -p 9200:9200
+          -e ELASTIC_PASSWORD=PaiSmart2025
+          -e discovery.type=single-node
+          -e xpack.security.enabled=true
+          -e xpack.security.http.ssl.enabled=false
+          -e ES_JAVA_OPTS="-Xms1g -Xmx1g"
+          paismart-es-ik:8.10.4
+
+      - name: Wait for Elasticsearch
+        shell: bash
+        run: |
+          for i in {1..40}; do
+            if curl -fsS -u elastic:PaiSmart2025 http://localhost:9200/_cluster/health >/dev/null; then
+              curl -fsS -u elastic:PaiSmart2025 http://localhost:9200/_analyze \
+                -H 'Content-Type: application/json' \
+                -d '{"analyzer":"ik_smart","text":"integration test"}' >/dev/null
+              exit 0
+            fi
+            docker logs --tail 30 paismart-es || true
+            sleep 10
+          done
+          docker logs paismart-es || true
+          exit 1
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -138,6 +154,18 @@ jobs:
         with:
           name: backend-integration-test-reports
           path: target/surefire-reports/**
+          if-no-files-found: warn
+
+      - name: Upload Elasticsearch logs
+        if: always()
+        run: docker logs paismart-es > elasticsearch-ci.log || true
+
+      - name: Archive Elasticsearch logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: elasticsearch-integration-logs
+          path: elasticsearch-ci.log
           if-no-files-found: warn
 
   backend-static-analysis:
