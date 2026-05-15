@@ -10,6 +10,8 @@ on:
       - master
       - 'dev/**'
   workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * 0'
 
 permissions:
   contents: read
@@ -61,9 +63,22 @@ jobs:
             target/site/jacoco/**
           if-no-files-found: warn
 
+      - name: Summarize backend reports
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Backend reports"
+            echo "- Artifact: backend-test-reports"
+            echo "- Unit test XML: target/surefire-reports"
+            echo "- Coverage HTML: target/site/jacoco/index.html"
+          } >> "$GITHUB_STEP_SUMMARY"
+          find target/surefire-reports target/site/jacoco -maxdepth 2 -type f 2>/dev/null | sort | head -100 || true
+
   backend-integration-test:
     name: Backend integration test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     continue-on-error: true
     services:
       mysql:
@@ -168,6 +183,18 @@ jobs:
           path: elasticsearch-ci.log
           if-no-files-found: warn
 
+      - name: Summarize integration reports
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Integration test reports"
+            echo "- Artifact: backend-integration-test-reports"
+            echo "- Elasticsearch logs: elasticsearch-integration-logs"
+            echo "- Integration test XML: target/surefire-reports"
+          } >> "$GITHUB_STEP_SUMMARY"
+          find target/surefire-reports -maxdepth 1 -type f 2>/dev/null | sort | head -100 || true
+
   backend-static-analysis:
     name: Backend static analysis
     runs-on: ubuntu-latest
@@ -208,9 +235,23 @@ jobs:
             target/site/spotbugs.html
           if-no-files-found: warn
 
+      - name: Summarize static analysis reports
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Static analysis reports"
+            echo "- Artifact: backend-static-analysis-reports"
+            echo "- Checkstyle: target/checkstyle-result.xml, target/site/checkstyle.html"
+            echo "- SpotBugs: target/spotbugsXml.xml, target/site/spotbugs.html"
+          } >> "$GITHUB_STEP_SUMMARY"
+          find target -maxdepth 3 -type f \( -iname '*checkstyle*' -o -iname '*spotbugs*' \) 2>/dev/null | sort || true
+
   dependency-vulnerability-scan:
     name: Dependency vulnerability scan
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
+    timeout-minutes: 30
     continue-on-error: true
     steps:
       - name: Checkout
@@ -225,11 +266,22 @@ jobs:
 
       - name: Run OWASP Dependency-Check
         continue-on-error: true
-        run: >
-          mvn -B
-          org.owasp:dependency-check-maven:10.0.4:check
-          -Dformat=HTML,JSON,SARIF
-          -DfailBuildOnCVSS=11
+        shell: bash
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          args=(
+            -B
+            org.owasp:dependency-check-maven:10.0.4:check
+            -Dformat=HTML,JSON,SARIF
+            -DfailBuildOnCVSS=11
+          )
+          if [ -n "$NVD_API_KEY" ]; then
+            args+=("-DnvdApiKey=$NVD_API_KEY")
+          else
+            echo "::warning::NVD_API_KEY is not configured; Dependency-Check may be slow or rate-limited."
+          fi
+          mvn "${args[@]}"
 
       - name: Upload dependency scan reports
         if: always()
@@ -245,6 +297,18 @@ jobs:
         with:
           sarif_file: target/dependency-check-report.sarif
         continue-on-error: true
+
+      - name: Summarize dependency scan reports
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Dependency vulnerability reports"
+            echo "- Artifact: dependency-vulnerability-reports"
+            echo "- SARIF upload: target/dependency-check-report.sarif"
+            echo "- This job runs on workflow_dispatch and weekly schedule, not on every push."
+          } >> "$GITHUB_STEP_SUMMARY"
+          find target -maxdepth 1 -type f -name 'dependency-check-report.*' 2>/dev/null | sort || true
 
   frontend-build-and-test:
     name: Frontend install, typecheck, build
@@ -286,6 +350,17 @@ jobs:
           path: frontend/dist/**
           if-no-files-found: warn
 
+      - name: Summarize frontend artifact
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Frontend build"
+            echo "- Artifact: frontend-dist"
+            echo "- Build output: frontend/dist"
+          } >> "$GITHUB_STEP_SUMMARY"
+          find frontend/dist -maxdepth 2 -type f 2>/dev/null | sort | head -100 || true
+
   docker-image-build:
     name: Docker image build
     runs-on: ubuntu-latest
@@ -309,6 +384,11 @@ jobs:
 
       - name: Build backend Docker image
         run: docker build -t paismart-backend:${{ github.sha }} .
+
+      - name: Summarize Docker image
+        run: |
+          echo "## Docker image" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Built image tag: paismart-backend:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
 
   sonar-quality-gate:
     name: SonarQube analysis
