@@ -46,7 +46,7 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationServiceTest,ParseServiceUnitTest"
+          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
 
@@ -416,7 +416,7 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationServiceTest,ParseServiceUnitTest"
+          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
 
