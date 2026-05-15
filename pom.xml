@@ -203,6 +203,40 @@
                     </excludes>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <configuration>
+                    <includes>
+                        <include>com/yizhaoqi/smartpai/controller/AuthController*</include>
+                        <include>com/yizhaoqi/smartpai/controller/UserController*</include>
+                        <include>com/yizhaoqi/smartpai/controller/UploadController*</include>
+                        <include>com/yizhaoqi/smartpai/controller/DocumentController*</include>
+                        <include>com/yizhaoqi/smartpai/controller/SearchController*</include>
+                        <include>com/yizhaoqi/smartpai/controller/ChatController*</include>
+                        <include>com/yizhaoqi/smartpai/controller/ConversationController*</include>
+                        <include>com/yizhaoqi/smartpai/service/FileTypeValidationService*</include>
+                        <include>com/yizhaoqi/smartpai/service/ConversationService*</include>
+                        <include>com/yizhaoqi/smartpai/service/ChatHandler*</include>
+                        <include>com/yizhaoqi/smartpai/model/User*</include>
+                        <include>com/yizhaoqi/smartpai/model/FileUpload*</include>
+                        <include>com/yizhaoqi/smartpai/entity/SearchResult*</include>
+                    </includes>
+                    <rules>
+                        <rule>
+                            <element>BUNDLE</element>
+                            <limits>
+                                <limit>
+                                    <counter>LINE</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.50</minimum>
+                                </limit>
+                            </limits>
+                        </rule>
+                    </rules>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

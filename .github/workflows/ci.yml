@@ -46,9 +46,10 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest"
+          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerTest,FirstPhaseControllerTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
+          org.jacoco:jacoco-maven-plugin:0.8.12:check
 
       - name: Package backend
         run: mvn -B -DskipTests package
@@ -71,7 +72,8 @@ jobs:
             echo "## Backend reports"
             echo "- Artifact: backend-test-reports"
             echo "- Unit test XML: target/surefire-reports"
-            echo "- Coverage HTML: target/site/jacoco/index.html"
+            echo "- Phase 1 coverage HTML: target/site/jacoco/index.html"
+            echo "- Coverage gate: line coverage >= 50%"
           } >> "$GITHUB_STEP_SUMMARY"
           find target/surefire-reports target/site/jacoco -maxdepth 2 -type f 2>/dev/null | sort | head -100 || true
 
@@ -416,9 +418,10 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest"
+          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerTest,FirstPhaseControllerTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
+          org.jacoco:jacoco-maven-plugin:0.8.12:check
 
       - name: Run SonarQube analysis
         if: ${{ env.SONAR_TOKEN != '' }}
