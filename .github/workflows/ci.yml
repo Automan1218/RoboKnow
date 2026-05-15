@@ -1,0 +1,323 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - 'dev/**'
+  pull_request:
+    branches:
+      - master
+      - 'dev/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  backend-build-and-test:
+    name: Backend build, unit test, coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run backend unit tests with JaCoCo
+        run: >
+          mvn -B
+          org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
+          "-Dtest=ConversationServiceTest,ParseServiceUnitTest"
+          test
+          org.jacoco:jacoco-maven-plugin:0.8.12:report
+
+      - name: Package backend
+        run: mvn -B -DskipTests package
+
+      - name: Upload backend test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            target/surefire-reports/**
+            target/site/jacoco/**
+          if-no-files-found: warn
+
+  backend-integration-test:
+    name: Backend integration test
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: PaiSmart2025
+          MYSQL_DATABASE: PaiSmart
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -pPaiSmart2025"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      elasticsearch:
+        image: elasticsearch:8.10.4
+        env:
+          ELASTIC_PASSWORD: PaiSmart2025
+          discovery.type: 'single-node'
+          xpack.security.enabled: 'true'
+          xpack.security.http.ssl.enabled: 'false'
+          ES_JAVA_OPTS: -Xms1g -Xmx1g
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd="curl -fsS -u elastic:PaiSmart2025 http://localhost:9200/_cluster/health || exit 1"
+          --health-interval=15s
+          --health-timeout=10s
+          --health-retries=20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run backend integration tests
+        env:
+          SPRING_PROFILES_ACTIVE: docker
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/PaiSmart?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: PaiSmart2025
+          SPRING_DATA_REDIS_HOST: localhost
+          SPRING_DATA_REDIS_PORT: 6379
+          SPRING_DATA_REDIS_PASSWORD: ''
+          SPRING_KAFKA_ENABLED: 'false'
+          ELASTICSEARCH_HOST: localhost
+          ELASTICSEARCH_PORT: 9200
+          ELASTICSEARCH_USERNAME: elastic
+          ELASTICSEARCH_PASSWORD: PaiSmart2025
+        run: >
+          mvn -B
+          "-Dtest=SmartPaiApplicationTests,ParseServiceTest,UploadServicePerformanceTest"
+          test
+
+      - name: Upload integration test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integration-test-reports
+          path: target/surefire-reports/**
+          if-no-files-found: warn
+
+  backend-static-analysis:
+    name: Backend static analysis
+    runs-on: ubuntu-latest
+    needs: backend-build-and-test
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run Checkstyle report
+        continue-on-error: true
+        run: >
+          mvn -B
+          org.apache.maven.plugins:maven-checkstyle-plugin:3.5.0:checkstyle
+
+      - name: Run SpotBugs report
+        continue-on-error: true
+        run: >
+          mvn -B
+          com.github.spotbugs:spotbugs-maven-plugin:4.8.6.6:spotbugs
+
+      - name: Upload static analysis reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-static-analysis-reports
+          path: |
+            target/checkstyle-result.xml
+            target/site/checkstyle.html
+            target/spotbugsXml.xml
+            target/site/spotbugs.html
+          if-no-files-found: warn
+
+  dependency-vulnerability-scan:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run OWASP Dependency-Check
+        continue-on-error: true
+        run: >
+          mvn -B
+          org.owasp:dependency-check-maven:10.0.4:check
+          -Dformat=HTML,JSON,SARIF
+          -DfailBuildOnCVSS=11
+
+      - name: Upload dependency scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-vulnerability-reports
+          path: target/dependency-check-report.*
+          if-no-files-found: warn
+
+      - name: Upload Dependency-Check SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: target/dependency-check-report.sarif
+        continue-on-error: true
+
+  frontend-build-and-test:
+    name: Frontend install, typecheck, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run frontend typecheck
+        continue-on-error: true
+        run: pnpm typecheck
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Upload frontend build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/**
+          if-no-files-found: warn
+
+  docker-image-build:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    needs:
+      - backend-build-and-test
+      - backend-integration-test
+      - frontend-build-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Package backend jar
+        run: mvn -B -DskipTests package
+
+      - name: Build backend Docker image
+        run: docker build -t paismart-backend:${{ github.sha }} .
+
+  sonar-quality-gate:
+    name: SonarQube analysis
+    runs-on: ubuntu-latest
+    needs: backend-build-and-test
+    if: ${{ vars.SONAR_HOST_URL != '' }}
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Run tests with coverage for SonarQube
+        if: ${{ env.SONAR_TOKEN != '' }}
+        run: >
+          mvn -B
+          org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
+          "-Dtest=ConversationServiceTest,ParseServiceUnitTest"
+          test
+          org.jacoco:jacoco-maven-plugin:0.8.12:report
+
+      - name: Run SonarQube analysis
+        if: ${{ env.SONAR_TOKEN != '' }}
+        run: >
+          mvn -B
+          org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar
+          -Dsonar.host.url=${SONAR_HOST_URL}
+          -Dsonar.token=${SONAR_TOKEN}
+          -Dsonar.projectKey=PaiSmart
+          -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
