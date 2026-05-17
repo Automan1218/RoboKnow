@@ -133,10 +133,6 @@ services:
 
       # 内存配置 (根据可用RAM调整)
       - ES_JAVA_OPTS=-Xms2g -Xmx2g
-    deploy:
-      resources:
-        limits:
-          memory: 2g
     command: >
       bash -c "
       if ! elasticsearch-plugin list | grep -q 'analysis-ik'; then
