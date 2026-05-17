@@ -68,8 +68,11 @@ public class EsIndexInitializer implements CommandLineRunner {
      * @throws Exception
      */
     private void createIndex() throws Exception {
-        // 读取 JSON 文件内容
-        String mappingJson = new String(Files.readAllBytes(mappingResource.getFile().toPath()), StandardCharsets.UTF_8);
+        // 读取 JSON 文件内容（使用输入流，兼容打包进 jar 内的 classpath 资源）
+        String mappingJson;
+        try (java.io.InputStream is = mappingResource.getInputStream()) {
+            mappingJson = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        }
 
         // 创建索引并应用映射
         CreateIndexRequest createIndexRequest = CreateIndexRequest.of(c -> c
