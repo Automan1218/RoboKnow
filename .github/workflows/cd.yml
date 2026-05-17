@@ -1,0 +1,82 @@
+name: CD
+
+# Build backend jar + frontend, then deploy to the EC2 host over SSH.
+# Requires repo secrets: EC2_HOST (public IP/DNS), EC2_SSH_KEY (private key).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/hzy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  JAVA_VERSION: '17'
+
+jobs:
+  build-and-deploy:
+    name: Build and deploy to EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Build backend jar
+        run: mvn -B -DskipTests package
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm build
+
+      - name: Stage deploy bundle
+        run: |
+          mkdir -p deploy-bundle
+          cp target/SmartPAI-*.jar deploy-bundle/app.jar
+          cp -r frontend/dist deploy-bundle/dist
+          cp docs/docker-compose.yaml deploy-bundle/docker-compose.yaml
+          cp deploy/nginx.conf deploy-bundle/nginx.conf
+          cp deploy/paismart.service deploy-bundle/paismart.service
+          cp deploy/deploy.sh deploy-bundle/deploy.sh
+
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload bundle to EC2
+        run: |
+          rsync -az -e "ssh -i ~/.ssh/ec2_key" \
+            deploy-bundle/ ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/paismart/
+
+      - name: Run remote deploy
+        run: |
+          ssh -i ~/.ssh/ec2_key ubuntu@${{ secrets.EC2_HOST }} \
+            'chmod +x /home/ubuntu/paismart/deploy.sh && /home/ubuntu/paismart/deploy.sh'

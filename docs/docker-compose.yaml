@@ -8,6 +8,7 @@ services:
     ports:
       - "3306:3306"
     environment:
+      MYSQL_DATABASE: PaiSmart
       MYSQL_ROOT_PASSWORD: PaiSmart2025
     volumes:
       - mysql-data:/var/lib/mysql
@@ -66,7 +67,7 @@ services:
 
       # 监听器配置
       - KAFKA_CFG_LISTENERS=CONTROLLER://:9093,PLAINTEXT://:9092
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
 
     volumes:
@@ -85,20 +86,20 @@ services:
         done
 
         # 创建第一个主题（忽略已存在的错误）
-        echo "Creating topic: file-processing"
+        echo "Creating topic: file-processing-topic1"
         kafka-topics.sh --create \
           --bootstrap-server localhost:9092 \
           --replication-factor 1 \
           --partitions 1 \
-          --topic file-processing 2>/dev/null || true
+          --topic file-processing-topic1 2>/dev/null || true
 
-        # 创建第二个主题 vectorization
-        echo "Creating topic: vectorization"
+        # 创建第二个主题 DLT
+        echo "Creating topic: file-processing-dlt"
         kafka-topics.sh --create \
           --bootstrap-server localhost:9092 \
           --replication-factor 1 \
           --partitions 1 \
-          --topic vectorization 2>/dev/null || true
+          --topic file-processing-dlt 2>/dev/null || true
         # 保持容器运行
         tail -f /dev/null
     healthcheck:

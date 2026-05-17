@@ -55,8 +55,8 @@ spring:
 
 minio:
   endpoint: http://localhost:19000
-  accessKey: aHZtaNPEzLcERm9uCY2F
-  secretKey: 5lhyVdLKfMfYXtmdVsulLYpgCRx5EO1EfIWAtJdq
+  accessKey: admin
+  secretKey: PaiSmart2025
   bucketName: uploads
   publicUrl: http://localhost:19000
 jwt:
@@ -101,12 +101,12 @@ deepseek:
   api:
     url: https://api.deepseek.com/v1  # 本地是 http://localhost:11434/v1 官方：https://api.deepseek.com/v1
     model: deepseek-chat  # 本地: deepseek-r1:7b, 官方: deepseek-chat
-    key:  # DeepSeek API Key 如果是本地就为空
+    key: sk-b3e2747d895e463cb95189958d7ffa84 # DeepSeek API Key 如果是本地就为空
 
 embedding:
   api:
     url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    key:    # 填入通义千问API key
+    key: sk-8d41bf83ecfb47af9872e18912d3e45e   # 填入通义千问API key
     model: text-embedding-v4
     batch-size: 10  # 单次请求最大行数（DashScope限制为10）
     dimension: 2048  # 指定向量维度
