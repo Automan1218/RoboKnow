@@ -24,12 +24,12 @@ public class OrgTagInitializer implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(OrgTagInitializer.class);
     
     private static final String DEFAULT_TAG = "default";
-    private static final String DEFAULT_NAME = "默认组织";
-    private static final String DEFAULT_DESCRIPTION = "系统默认组织标签，自动分配给所有新用户";
+    private static final String DEFAULT_NAME = "Default Organization";
+    private static final String DEFAULT_DESCRIPTION = "System default organization tag, automatically assigned to all new users";
 
     private static final String ADMIN_TAG = "admin";
-    private static final String ADMIN_NAME = "管理员组织";
-    private static final String ADMIN_DESCRIPTION = "管理员专用组织标签，具有管理权限";
+    private static final String ADMIN_NAME = "Admin Organization";
+    private static final String ADMIN_DESCRIPTION = "Admin-only organization tag with management privileges";
 
     @Autowired
     private OrganizationTagRepository organizationTagRepository;

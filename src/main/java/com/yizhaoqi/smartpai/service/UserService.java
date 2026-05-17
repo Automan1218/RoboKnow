@@ -38,11 +38,11 @@ public class UserService {
     private static final Logger logger = LoggerFactory.getLogger(UserService.class);
     
     private static final String DEFAULT_ORG_TAG = "DEFAULT";
-    private static final String DEFAULT_ORG_NAME = "默认组织";
-    private static final String DEFAULT_ORG_DESCRIPTION = "系统默认组织标签，自动分配给所有新用户";
+    private static final String DEFAULT_ORG_NAME = "Default Organization";
+    private static final String DEFAULT_ORG_DESCRIPTION = "System default organization tag, automatically assigned to all new users";
     private static final String PRIVATE_TAG_PREFIX = "PRIVATE_";
-    private static final String PRIVATE_ORG_NAME_SUFFIX = "的私人空间";
-    private static final String PRIVATE_ORG_DESCRIPTION = "用户的私人组织标签，仅用户本人可访问";
+    private static final String PRIVATE_ORG_NAME_SUFFIX = "'s Private Space";
+    private static final String PRIVATE_ORG_DESCRIPTION = "Private organization tag, accessible only by the owner";
 
     @Autowired
     private UserRepository userRepository;

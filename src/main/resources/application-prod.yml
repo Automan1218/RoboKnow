@@ -59,6 +59,7 @@ minio:
   secretKey: PaiSmart2025
   bucketName: uploads
   publicUrl: http://localhost:19000
+
 jwt:
   secret-key: "PXrQbuCwXwOZzkML/Vm2S5rSwt1iybvmKtGDzVEu+Hc="
 
