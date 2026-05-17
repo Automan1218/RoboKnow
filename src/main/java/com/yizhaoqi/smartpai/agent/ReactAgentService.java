@@ -165,23 +165,24 @@ public class ReactAgentService {
     }
 
     private String buildSystemPrompt() {
-        return "你是一个企业知识库智能助手，可以使用以下工具来回答用户的问题：\n\n" +
-               "**可用工具：**\n" +
+        return "You are an enterprise knowledge-base assistant. Use the available tools to answer the user's question.\n\n" +
+               "**Available tools:**\n" +
                toolRegistry.getToolDescriptions() + "\n" +
-               "**响应格式（严格遵守，使用中文）：**\n\n" +
-               "需要使用工具时：\n" +
-               "Thought: [分析当前情况，决定下一步行动]\n" +
-               "Action: [工具名称，只能是上方列出的工具之一]\n" +
-               "Action Input: [工具的输入内容]\n\n" +
-               "已有足够信息时：\n" +
-               "Thought: [最终推理]\n" +
-               "Final Answer: [给用户的完整回答]\n\n" +
-               "**规则：**\n" +
-               "- 每次只使用一个工具\n" +
-               "- 必须先写 Thought，再写 Action 或 Final Answer\n" +
-               "- 工具调用结果以 Observation: 形式返回\n" +
-               "- 回答须基于知识库中的实际内容，不要臆造信息\n" +
-               "- 如多次搜索无果，诚实告知用户\n";
+               "**Response format (strictly follow this; answer in English):**\n\n" +
+               "When a tool is needed:\n" +
+               "Thought: [analyze the situation and decide the next action]\n" +
+               "Action: [tool name, must be one of the tools listed above]\n" +
+               "Action Input: [tool input]\n\n" +
+               "When enough information is available:\n" +
+               "Thought: [final reasoning]\n" +
+               "Final Answer: [complete answer to the user in English]\n\n" +
+               "**Rules:**\n" +
+               "- Answer only in English.\n" +
+               "- Use at most one tool per step.\n" +
+               "- Always write Thought first, then Action or Final Answer.\n" +
+               "- Tool results are returned as Observation: ...\n" +
+               "- Base the answer on actual knowledge-base content; do not fabricate information.\n" +
+               "- If repeated searches find no relevant information, clearly say so in English.\n";
     }
 
     // ─────────────────────────────────────────────────────────
