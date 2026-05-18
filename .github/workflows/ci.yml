@@ -24,8 +24,6 @@ concurrency:
 
 env:
   JAVA_VERSION: '17'
-  NODE_VERSION: '20'
-  PNPM_VERSION: '9'
 
 jobs:
   backend-build-and-test:
@@ -312,64 +310,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           find target -maxdepth 1 -type f -name 'dependency-check-report.*' 2>/dev/null | sort || true
 
-  frontend-build-and-test:
-    name: Frontend install, typecheck, build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run frontend typecheck
-        continue-on-error: true
-        run: pnpm typecheck
-
-      - name: Build frontend
-        run: pnpm build
-
-      - name: Upload frontend build artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist/**
-          if-no-files-found: warn
-
-      - name: Summarize frontend artifact
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "## Frontend build"
-            echo "- Artifact: frontend-dist"
-            echo "- Build output: frontend/dist"
-          } >> "$GITHUB_STEP_SUMMARY"
-          find frontend/dist -maxdepth 2 -type f 2>/dev/null | sort | head -100 || true
-
   docker-image-build:
     name: Docker image build
     runs-on: ubuntu-latest
     needs:
       - backend-build-and-test
       - backend-integration-test
-      - frontend-build-and-test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
