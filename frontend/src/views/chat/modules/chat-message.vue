@@ -69,46 +69,10 @@ function handleContentClick(event: MouseEvent) {
   }
 }
 
-// Handle source file clicks
-async function handleSourceFileClick(fileName: string) {
+// Handle source file clicks — open inline preview instead of downloading
+function handleSourceFileClick(fileName: string) {
   const decodedFileName = decodeURIComponent(fileName);
-  console.log('Source file clicked:', decodedFileName);
-
-  try {
-    window.$message?.loading(`Fetching download link: ${decodedFileName}`, {
-      duration: 0,
-      closable: false
-    });
-
-    // Call the file download API
-    const { error, data } = await request<Api.Document.DownloadResponse>({
-      url: 'documents/download',
-      params: {
-        fileName: decodedFileName,
-        token: authStore.token
-      },
-      baseURL: '/proxy-api'
-    });
-
-    window.$message?.destroyAll();
-
-    if (error) {
-      window.$message?.error(`File download failed: ${error.response?.data?.message || 'Unknown error'}`);
-      return;
-    }
-
-    if (data?.downloadUrl) {
-      // Open the download link in a new window
-      window.open(data.downloadUrl, '_blank');
-      window.$message?.success(`Download link opened: ${decodedFileName}`);
-    } else {
-      window.$message?.error('Could not get download link');
-    }
-  } catch (err) {
-    window.$message?.destroyAll();
-    console.error('File download failed:', err);
-    window.$message?.error(`File download failed: ${decodedFileName}`);
-  }
+  chatStore.previewFileName = decodedFileName;
 }
 </script>
 

@@ -19,6 +19,7 @@ export const useChatStore = defineStore(SetupStoreId.Chat, () => {
   });
 
   const scrollToBottom = ref<null | (() => void)>(null);
+  const previewFileName = ref<string>('');
 
   return {
     input,
@@ -29,6 +30,7 @@ export const useChatStore = defineStore(SetupStoreId.Chat, () => {
     wsSend,
     wsOpen,
     wsClose,
-    scrollToBottom
+    scrollToBottom,
+    previewFileName
   };
 });

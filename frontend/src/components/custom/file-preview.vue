@@ -1,10 +1,9 @@
 <template>
   <div class="file-preview-container">
-    <!-- Preview header -->
     <div class="preview-header">
       <div class="flex items-center gap-2">
         <SvgIcon :local-icon="getFileIcon(fileName)" class="text-16" />
-        <span class="font-medium">{{ fileName }}</span>
+        <span class="font-medium truncate max-w-200px" :title="fileName">{{ fileName }}</span>
       </div>
       <div class="flex items-center gap-2">
         <NButton size="small" @click="downloadFile" :loading="downloading">
@@ -20,8 +19,7 @@
         </NButton>
       </div>
     </div>
-    
-    <!-- Preview content -->
+
     <div class="preview-content">
       <template v-if="loading">
         <div class="flex items-center justify-center h-full">
@@ -35,8 +33,26 @@
         </div>
       </template>
       <template v-else>
-        <div class="content-wrapper">
-          <pre class="preview-text">{{ content }}</pre>
+        <!-- PDF: iframe with presigned URL -->
+        <iframe
+          v-if="fileType === 'pdf' && presignedUrl"
+          :src="presignedUrl"
+          class="w-full h-full border-0"
+          title="PDF Preview"
+        />
+        <!-- Images -->
+        <div v-else-if="fileType === 'image' && presignedUrl" class="flex items-center justify-center h-full overflow-auto p-4">
+          <img :src="presignedUrl" :alt="fileName" class="max-w-full max-h-full object-contain" />
+        </div>
+        <!-- Text / Markdown -->
+        <div v-else-if="textContent" class="content-wrapper">
+          <pre class="preview-text">{{ textContent }}</pre>
+        </div>
+        <!-- Unsupported format -->
+        <div v-else class="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+          <icon-mdi-file-question class="text-48" />
+          <p>Preview not available for this file type.</p>
+          <NButton type="primary" @click="downloadFile" :loading="downloading">Download to view</NButton>
         </div>
       </template>
     </div>
@@ -44,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { NButton, NSpin } from 'naive-ui';
 import SvgIcon from '@/components/custom/svg-icon.vue';
 import { request } from '@/service/request';
@@ -64,107 +80,98 @@ const emit = defineEmits<Emits>();
 
 const loading = ref(false);
 const downloading = ref(false);
-const content = ref('');
+const textContent = ref('');
+const presignedUrl = ref('');
 const error = ref('');
 
-// Get file icon
-function getFileIcon(fileName: string) {
-  const ext = getFileExt(fileName);
+const fileType = computed(() => {
+  const ext = getFileExt(props.fileName)?.toLowerCase();
+  if (ext === 'pdf') return 'pdf';
+  if (ext && ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) return 'image';
+  if (ext && ['txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'log'].includes(ext)) return 'text';
+  return 'other';
+});
+
+function getFileIcon(name: string) {
+  const ext = getFileExt(name);
   if (ext) {
-    const supportedIcons = ['pdf', 'doc', 'docx', 'txt', 'md', 'jpg', 'jpeg', 'png', 'gif'];
-    return supportedIcons.includes(ext.toLowerCase()) ? ext : 'dflt';
+    const supported = ['pdf', 'doc', 'docx', 'txt', 'md', 'jpg', 'jpeg', 'png', 'gif'];
+    return supported.includes(ext.toLowerCase()) ? ext : 'dflt';
   }
   return 'dflt';
 }
 
-// Reload preview content when the file name changes
-watch(() => props.fileName, async (newFileName) => {
-  if (newFileName && props.visible) {
-    await loadPreviewContent();
-  }
+watch(() => [props.fileName, props.visible] as const, ([name, visible]) => {
+  if (name && visible) loadPreview();
 }, { immediate: true });
 
-// Watch visibility changes
-watch(() => props.visible, async (visible) => {
-  if (visible && props.fileName) {
-    await loadPreviewContent();
-  }
-});
-
-// Load preview content
-async function loadPreviewContent() {
+async function loadPreview() {
   if (!props.fileName) return;
-  
   loading.value = true;
   error.value = '';
-  content.value = '';
-  
+  textContent.value = '';
+  presignedUrl.value = '';
+
   try {
     const token = localStorage.getItem('token');
-    const { error: requestError, data } = await request<{
-      fileName: string;
-      content: string;
-      fileSize: number;
-    }>({
-      url: '/documents/preview',
-      params: {
-        fileName: props.fileName,
-        token: token || undefined
+
+    if (fileType.value === 'pdf' || fileType.value === 'image') {
+      // Get presigned URL for binary files
+      const { error: reqErr, data } = await request<{ fileName: string; downloadUrl: string }>({
+        url: '/documents/download',
+        params: { fileName: props.fileName, token: token || undefined }
+      });
+      if (reqErr || !data) {
+        error.value = `Preview failed: ${reqErr?.message ?? 'Could not get file URL'}`;
+      } else {
+        presignedUrl.value = data.downloadUrl;
       }
-    });
-    
-    if (requestError) {
-      error.value = `Preview failed: ${requestError.message || 'Unknown error'}`;
-    } else if (data) {
-      content.value = data.content;
+    } else {
+      // Get text content for readable files
+      const { error: reqErr, data } = await request<{ fileName: string; content: string }>({
+        url: '/documents/preview',
+        params: { fileName: props.fileName, token: token || undefined }
+      });
+      if (reqErr || !data) {
+        error.value = `Preview failed: ${reqErr?.message ?? 'Unknown error'}`;
+      } else {
+        textContent.value = data.content;
+      }
     }
   } catch (err: any) {
-    error.value = `Preview failed: ${err.message || 'Network error'}`;
+    error.value = `Preview failed: ${err.message ?? 'Network error'}`;
   } finally {
     loading.value = false;
   }
 }
 
-// Download file
 async function downloadFile() {
   if (!props.fileName) return;
-  
   downloading.value = true;
-  
   try {
     const token = localStorage.getItem('token');
-    const { error: requestError, data } = await request<{
-      fileName: string;
-      downloadUrl: string;
-      fileSize: number;
-    }>({
+    const { error: reqErr, data } = await request<{ fileName: string; downloadUrl: string }>({
       url: '/documents/download',
-      params: {
-        fileName: props.fileName,
-        token: token || undefined
-      }
+      params: { fileName: props.fileName, token: token || undefined }
     });
-    
-    if (requestError) {
-      window.$message?.error(`Download failed: ${requestError.message || 'Unknown error'}`);
-    } else if (data) {
-      // Download the file with the presigned URL
+    if (reqErr || !data) {
+      window.$message?.error(`Download failed: ${reqErr?.message ?? 'Unknown error'}`);
+    } else {
       const link = document.createElement('a');
       link.href = data.downloadUrl;
       link.download = data.fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.$message?.success('File download started');
+      window.$message?.success('Download started');
     }
   } catch (err: any) {
-    window.$message?.error(`Download failed: ${err.message || 'Network error'}`);
+    window.$message?.error(`Download failed: ${err.message ?? 'Network error'}`);
   } finally {
     downloading.value = false;
   }
 }
 
-// Close preview
 function closePreview() {
   emit('close');
 }
@@ -172,19 +179,23 @@ function closePreview() {
 
 <style scoped lang="scss">
 .file-preview-container {
-  @apply h-full flex flex-col bg-white border-l border-gray-200;
-  
+  @apply h-full flex flex-col bg-white;
+
   .preview-header {
-    @apply flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50;
+    @apply flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50 shrink-0;
   }
-  
+
   .preview-content {
     @apply flex-1 overflow-hidden;
-    
+
+    iframe {
+      display: block;
+    }
+
     .content-wrapper {
       @apply h-full overflow-auto p-4;
     }
-    
+
     .preview-text {
       @apply text-sm font-mono whitespace-pre-wrap break-words;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
