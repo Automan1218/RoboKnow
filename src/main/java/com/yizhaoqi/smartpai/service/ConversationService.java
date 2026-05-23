@@ -6,11 +6,14 @@ import com.yizhaoqi.smartpai.model.User;
 import com.yizhaoqi.smartpai.repository.ConversationRepository;
 import com.yizhaoqi.smartpai.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ConversationService {
@@ -29,6 +32,10 @@ public class ConversationService {
      * @param answer 系统回答内容
      */
     public void recordConversation(String username, String question, String answer) {
+        recordConversation(username, question, answer, null);
+    }
+
+    public void recordConversation(String username, String question, String answer, String summary) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new CustomException("User not found", HttpStatus.NOT_FOUND));
 
@@ -36,8 +43,20 @@ public class ConversationService {
         conversation.setUser(user);
         conversation.setQuestion(question);
         conversation.setAnswer(answer);
+        conversation.setSummary(summary);
 
         conversationRepository.save(conversation);
+    }
+
+    public List<String> getRecentSummaries(String username, int limit) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return Collections.emptyList();
+        return conversationRepository
+                .findRecentWithSummaryByUserId(user.getId(), PageRequest.of(0, limit))
+                .stream()
+                .map(Conversation::getSummary)
+                .filter(s -> s != null && !s.isBlank())
+                .collect(Collectors.toList());
     }
 
     /**

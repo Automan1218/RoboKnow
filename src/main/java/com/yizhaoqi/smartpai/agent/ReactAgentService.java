@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yizhaoqi.smartpai.agent.tool.ToolRegistry;
 import com.yizhaoqi.smartpai.client.DeepSeekClient;
 import com.yizhaoqi.smartpai.service.AgentStopService;
+import com.yizhaoqi.smartpai.service.ConversationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -18,23 +19,29 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * ReAct Agent 核心服务。
+ * ReAct Agent with short-term memory compression and long-term memory injection.
  *
- * 状态机流转：THINKING → ACTING → OBSERVING → THINKING（循环，最多 MAX_ITERATIONS 轮）→ ANSWERING
+ * Short-term: Redis conversation history. When > STM_THRESHOLD messages, oldest messages
+ * are compressed into a rolling summary stored at conversation:{id}:stm_summary.
+ * Context sent to LLM = [system] + [STM summary?] + [LTM summaries?] + [last CONTEXT_WINDOW messages] + [user msg]
  *
- * 每个状态变化通过 WebSocket 推送结构化事件，前端可实时渲染完整推理链。
+ * Long-term: after each exchange a one-sentence summary is saved to DB via ConversationService.
+ * On new messages the last LTM_LIMIT summaries are injected as system context.
  */
 @Service
 public class ReactAgentService {
 
     private static final Logger logger = LoggerFactory.getLogger(ReactAgentService.class);
     private static final int MAX_ITERATIONS = 5;
+    private static final int STM_THRESHOLD = 20;   // compress when history exceeds this
+    private static final int CONTEXT_WINDOW = 10;  // recent messages sent to LLM
+    private static final int LTM_LIMIT = 3;        // past conversation summaries to inject
 
-    // ReAct 响应解析正则
     private static final Pattern THOUGHT_PATTERN =
         Pattern.compile("Thought:\\s*(.+?)(?=\\nAction:|\\nFinal Answer:|$)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
     private static final Pattern ACTION_PATTERN =
@@ -48,24 +55,27 @@ public class ReactAgentService {
     private final ToolRegistry toolRegistry;
     private final AgentStopService agentStopService;
     private final RedisTemplate<String, String> redisTemplate;
+    private final ConversationService conversationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ReactAgentService(DeepSeekClient deepSeekClient,
                              ToolRegistry toolRegistry,
                              AgentStopService agentStopService,
-                             RedisTemplate<String, String> redisTemplate) {
+                             RedisTemplate<String, String> redisTemplate,
+                             ConversationService conversationService) {
         this.deepSeekClient = deepSeekClient;
         this.toolRegistry = toolRegistry;
         this.agentStopService = agentStopService;
         this.redisTemplate = redisTemplate;
+        this.conversationService = conversationService;
     }
 
     // ─────────────────────────────────────────────────────────
-    // 入口：由 ChatHandler 在独立线程中调用
+    // Entry point
     // ─────────────────────────────────────────────────────────
 
     public void processMessage(String userId, String userMessage, WebSocketSession session) {
-        logger.info("ReactAgent 开始处理消息，用户: {}", userId);
+        logger.info("ReactAgent processing message, user: {}", userId);
         try {
             String conversationId = getOrCreateConversationId(userId);
             List<Map<String, String>> history = getConversationHistory(conversationId);
@@ -74,10 +84,10 @@ public class ReactAgentService {
             String finalAnswer = runReActLoop(ctx);
 
             sendCompletionNotification(session);
-            updateConversationHistory(conversationId, userMessage, finalAnswer);
-            logger.info("ReactAgent 处理完成，用户: {}", userId);
+            updateConversationHistory(conversationId, userId, userMessage, finalAnswer);
+            logger.info("ReactAgent done, user: {}", userId);
         } catch (Exception e) {
-            logger.error("ReactAgent 处理消息失败: {}", e.getMessage(), e);
+            logger.error("ReactAgent failed: {}", e.getMessage(), e);
             sendError(session, "AI 服务暂时不可用，请稍后重试");
         } finally {
             agentStopService.clear(session.getId());
@@ -85,7 +95,7 @@ public class ReactAgentService {
     }
 
     // ─────────────────────────────────────────────────────────
-    // ReAct 主循环
+    // ReAct loop
     // ─────────────────────────────────────────────────────────
 
     private String runReActLoop(AgentContext ctx) throws InterruptedException {
@@ -94,17 +104,16 @@ public class ReactAgentService {
 
         for (int i = 0; i < MAX_ITERATIONS; i++) {
             if (agentStopService.shouldStop(ctx.getSession().getId())) {
-                logger.info("检测到停止信号，中断 ReAct 循环，迭代: {}", i);
+                logger.info("Stop signal detected, breaking at iteration {}", i);
                 break;
             }
 
-            // ── THINKING ──
             pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.THINKING, i + 1));
-            logger.debug("ReAct 迭代 {}：调用 LLM", i + 1);
+            logger.debug("ReAct iteration {}: calling LLM", i + 1);
 
             String llmResponse = deepSeekClient.chatBlocking(messages);
             if (llmResponse.isBlank()) {
-                logger.warn("LLM 返回空响应，迭代: {}", i + 1);
+                logger.warn("LLM returned empty response at iteration {}", i + 1);
                 break;
             }
 
@@ -119,28 +128,23 @@ public class ReactAgentService {
                 break;
             }
 
-            // ── ACTING ──
             pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.ACTING, i + 1));
             pushEvent(ctx.getSession(), AgentEvent.action(step.action, step.actionInput));
 
-            // ── OBSERVING ──
             pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.OBSERVING, i + 1));
             String observation = toolRegistry.execute(step.action, step.actionInput, ctx);
             pushEvent(ctx.getSession(), AgentEvent.observation(step.action, observation));
-            logger.debug("工具 {} 返回 Observation ({}字符)", step.action, observation.length());
+            logger.debug("Tool {} returned observation ({} chars)", step.action, observation.length());
 
-            // 追加本轮对话到消息历史
             messages.add(Map.of("role", "assistant", "content", step.formatAssistantContent()));
             messages.add(Map.of("role", "user",      "content", "Observation: " + observation));
         }
 
-        // 超过最大迭代次数仍无 Final Answer
         if (finalAnswer == null) {
             finalAnswer = "经过多轮检索，未找到足够相关信息来回答您的问题。" +
                           "请尝试换一种提问方式，或确认相关文档已上传到知识库。";
         }
 
-        // ── ANSWERING ──
         pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.ANSWERING, 0));
         streamText(ctx.getSession(), finalAnswer);
 
@@ -148,16 +152,29 @@ public class ReactAgentService {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 消息构建
+    // Message construction with memory
     // ─────────────────────────────────────────────────────────
 
     private List<Map<String, String>> buildInitialMessages(AgentContext ctx) {
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", buildSystemPrompt()));
 
-        // 保留最近 10 条历史，避免超出上下文窗口
+        // Long-term memory: summaries of recent past conversations (cross-session)
+        String ltmContext = loadLongTermContext(ctx.getUserId());
+        if (ltmContext != null) {
+            messages.add(Map.of("role", "system", "content", ltmContext));
+        }
+
+        // Short-term memory: compressed summary of older in-session messages
+        String stmSummary = getShortTermSummary(ctx.getConversationId());
+        if (stmSummary != null) {
+            messages.add(Map.of("role", "system", "content",
+                    "Summary of earlier conversation in this session:\n" + stmSummary));
+        }
+
+        // Recent history within context window
         List<Map<String, String>> history = ctx.getHistory();
-        int start = Math.max(0, history.size() - 10);
+        int start = Math.max(0, history.size() - CONTEXT_WINDOW);
         messages.addAll(history.subList(start, history.size()));
 
         messages.add(Map.of("role", "user", "content", ctx.getUserMessage()));
@@ -186,112 +203,118 @@ public class ReactAgentService {
     }
 
     // ─────────────────────────────────────────────────────────
-    // LLM 响应解析
+    // Long-term memory (DB-backed, cross-session)
     // ─────────────────────────────────────────────────────────
 
-    private AgentStep parseResponse(String response, int iteration) {
-        AgentStep step = new AgentStep(iteration);
-
-        // 优先匹配 Final Answer
-        Matcher faMatcher = FINAL_ANSWER_PATTERN.matcher(response);
-        if (faMatcher.find()) {
-            step.isFinalAnswer = true;
-            step.finalAnswer = faMatcher.group(1).trim();
-            Matcher thoughtMatcher = THOUGHT_PATTERN.matcher(response);
-            if (thoughtMatcher.find()) {
-                step.thought = thoughtMatcher.group(1).trim();
+    private String loadLongTermContext(String username) {
+        try {
+            List<String> summaries = conversationService.getRecentSummaries(username, LTM_LIMIT);
+            if (summaries.isEmpty()) return null;
+            StringBuilder sb = new StringBuilder("Previous conversation topics (for context only):\n");
+            for (String s : summaries) {
+                sb.append("- ").append(s).append("\n");
             }
-            return step;
+            return sb.toString();
+        } catch (Exception e) {
+            logger.warn("Failed to load long-term memory for user {}: {}", username, e.getMessage());
+            return null;
         }
+    }
 
-        // 提取 Thought
-        Matcher thoughtMatcher = THOUGHT_PATTERN.matcher(response);
-        if (thoughtMatcher.find()) {
-            step.thought = thoughtMatcher.group(1).trim();
+    private static final List<String> EMPTY_ANSWER_SIGNALS = List.of(
+        "未找到", "找不到", "无相关", "没有找到", "无法找到", "no relevant", "not found", "no information"
+    );
+
+    private boolean isWorthSavingToLtm(String question, String answer) {
+        String combined = question + answer;
+        if (combined.length() < 50) return false;
+        String lowerAnswer = answer.toLowerCase();
+        for (String signal : EMPTY_ANSWER_SIGNALS) {
+            if (lowerAnswer.contains(signal.toLowerCase())) return false;
         }
+        return true;
+    }
 
-        // 提取 Action
-        Matcher actionMatcher = ACTION_PATTERN.matcher(response);
-        if (actionMatcher.find()) {
-            step.action = actionMatcher.group(1).trim();
+    private void saveToLongTermMemory(String username, String question, String answer) {
+        if (!isWorthSavingToLtm(question, answer)) {
+            logger.debug("跳过 LTM 写入：内容无实质性结论，用户: {}", username);
+            return;
         }
-
-        // 提取 Action Input
-        Matcher inputMatcher = ACTION_INPUT_PATTERN.matcher(response);
-        if (inputMatcher.find()) {
-            step.actionInput = inputMatcher.group(1).trim();
+        try {
+            String snippet = answer.length() > 500 ? answer.substring(0, 500) : answer;
+            List<Map<String, String>> req = List.of(
+                Map.of("role", "system", "content",
+                       "从以下问答中提取已确认的关键结论、事实或用户获得的重要信息，用一句话概括。" +
+                       "只提取明确、具体的结论，不要概括问题本身，不要写'用户问了...'。"),
+                Map.of("role", "user", "content",
+                       "问题：" + question + "\n回答：" + snippet)
+            );
+            String summary = deepSeekClient.chatBlocking(req);
+            if (summary == null || summary.isBlank()) {
+                summary = question.length() > 120 ? question.substring(0, 120) + "..." : question;
+            }
+            conversationService.recordConversation(username, question, answer, summary);
+            logger.debug("LTM 写入成功，用户: {}，结论: {}", username, summary);
+        } catch (Exception e) {
+            logger.warn("LTM 写入失败，用户: {}: {}", username, e.getMessage());
         }
-
-        // 未能解析出合法工具调用 → 视为最终答案
-        if (step.action == null || step.actionInput == null || !toolRegistry.hasTool(step.action)) {
-            logger.warn("未解析出合法工具调用，将 LLM 响应作为最终答案，迭代: {}", iteration);
-            step.isFinalAnswer = true;
-            step.finalAnswer = response.trim();
-        }
-
-        return step;
     }
 
     // ─────────────────────────────────────────────────────────
-    // WebSocket 推送
+    // Short-term memory (Redis, in-session compression)
     // ─────────────────────────────────────────────────────────
 
-    private void pushEvent(WebSocketSession session, AgentEvent event) {
+    private String getShortTermSummary(String conversationId) {
         try {
-            String json = objectMapper.writeValueAsString(event.getPayload());
-            session.sendMessage(new TextMessage(json));
+            return redisTemplate.opsForValue().get(stmSummaryKey(conversationId));
         } catch (Exception e) {
-            logger.error("推送 Agent 事件失败: {}", e.getMessage(), e);
+            logger.warn("Failed to read STM summary: {}", e.getMessage());
+            return null;
         }
     }
 
     /**
-     * 将最终答案文本模拟流式推送，30 字符/批，给前端打字效果。
+     * Summarizes messages[0..size-CONTEXT_WINDOW] into a rolling summary,
+     * persists it to Redis, and returns only the recent tail.
      */
-    private void streamText(WebSocketSession session, String text) throws InterruptedException {
-        int chunkSize = 30;
-        for (int i = 0; i < text.length(); i += chunkSize) {
-            if (agentStopService.shouldStop(session.getId())) break;
+    private List<Map<String, String>> compressShortTermMemory(String conversationId,
+                                                               List<Map<String, String>> history) {
+        int splitAt = history.size() - CONTEXT_WINDOW;
+        List<Map<String, String>> toCompress = history.subList(0, splitAt);
+        List<Map<String, String>> recent = new ArrayList<>(history.subList(splitAt, history.size()));
 
-            String chunk = text.substring(i, Math.min(i + chunkSize, text.length()));
-            try {
-                Map<String, String> payload = Map.of("chunk", chunk);
-                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
-            } catch (Exception e) {
-                logger.error("流式推送文本块失败: {}", e.getMessage(), e);
-                break;
+        try {
+            String existing = getShortTermSummary(conversationId);
+            StringBuilder input = new StringBuilder();
+            if (existing != null && !existing.isBlank()) {
+                input.append("Previous summary:\n").append(existing).append("\n\nNew messages to incorporate:\n");
             }
-            if (i + chunkSize < text.length()) {
-                Thread.sleep(25);
+            for (Map<String, String> msg : toCompress) {
+                input.append(msg.get("role")).append(": ").append(msg.get("content")).append("\n");
             }
+
+            List<Map<String, String>> req = List.of(
+                Map.of("role", "system", "content",
+                       "Summarize the following conversation history in 3-5 sentences, preserving key facts and context needed to understand the ongoing conversation."),
+                Map.of("role", "user", "content", input.toString())
+            );
+            String newSummary = deepSeekClient.chatBlocking(req);
+            if (newSummary != null && !newSummary.isBlank()) {
+                redisTemplate.opsForValue().set(stmSummaryKey(conversationId), newSummary, Duration.ofDays(7));
+                logger.debug("STM compressed {} messages into summary for conversation {}", toCompress.size(), conversationId);
+            }
+        } catch (Exception e) {
+            logger.warn("STM compression failed for conversation {}: {}", conversationId, e.getMessage());
         }
+        return recent;
     }
 
-    private void sendCompletionNotification(WebSocketSession session) {
-        try {
-            Map<String, Object> notification = new HashMap<>();
-            notification.put("type", "completion");
-            notification.put("status", "finished");
-            notification.put("message", "响应已完成");
-            notification.put("timestamp", System.currentTimeMillis());
-            notification.put("date", java.time.LocalDateTime.now().toString());
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(notification)));
-        } catch (Exception e) {
-            logger.error("发送完成通知失败: {}", e.getMessage(), e);
-        }
-    }
-
-    private void sendError(WebSocketSession session, String message) {
-        try {
-            Map<String, String> err = Map.of("error", message);
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(err)));
-        } catch (Exception e) {
-            logger.error("发送错误消息失败: {}", e.getMessage(), e);
-        }
+    private String stmSummaryKey(String conversationId) {
+        return "conversation:" + conversationId + ":stm_summary";
     }
 
     // ─────────────────────────────────────────────────────────
-    // 对话历史（Redis，与 ChatHandler 逻辑一致）
+    // Conversation history (Redis)
     // ─────────────────────────────────────────────────────────
 
     private String getOrCreateConversationId(String userId) {
@@ -311,12 +334,13 @@ public class ReactAgentService {
             if (json == null) return new ArrayList<>();
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (Exception e) {
-            logger.error("读取对话历史失败, conversationId={}: {}", conversationId, e.getMessage());
+            logger.error("Failed to read conversation history, conversationId={}: {}", conversationId, e.getMessage());
             return new ArrayList<>();
         }
     }
 
-    private void updateConversationHistory(String conversationId, String userMessage, String response) {
+    private void updateConversationHistory(String conversationId, String userId,
+                                           String userMessage, String response) {
         String key = "conversation:" + conversationId;
         List<Map<String, String>> history = getConversationHistory(conversationId);
 
@@ -335,14 +359,115 @@ public class ReactAgentService {
         assistantMsg.put("timestamp", ts);
         history.add(assistantMsg);
 
-        if (history.size() > 20) {
-            history = history.subList(history.size() - 20, history.size());
+        // Compress older messages instead of dropping them
+        if (history.size() > STM_THRESHOLD) {
+            history = compressShortTermMemory(conversationId, history);
         }
 
         try {
             redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(history), Duration.ofDays(7));
         } catch (Exception e) {
-            logger.error("更新对话历史失败, conversationId={}: {}", conversationId, e.getMessage());
+            logger.error("Failed to update conversation history, conversationId={}: {}", conversationId, e.getMessage());
+        }
+
+        // Save to DB asynchronously (long-term memory)
+        CompletableFuture.runAsync(() -> saveToLongTermMemory(userId, userMessage, response));
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // LLM response parsing
+    // ─────────────────────────────────────────────────────────
+
+    private AgentStep parseResponse(String response, int iteration) {
+        AgentStep step = new AgentStep(iteration);
+
+        Matcher faMatcher = FINAL_ANSWER_PATTERN.matcher(response);
+        if (faMatcher.find()) {
+            step.isFinalAnswer = true;
+            step.finalAnswer = faMatcher.group(1).trim();
+            Matcher thoughtMatcher = THOUGHT_PATTERN.matcher(response);
+            if (thoughtMatcher.find()) {
+                step.thought = thoughtMatcher.group(1).trim();
+            }
+            return step;
+        }
+
+        Matcher thoughtMatcher = THOUGHT_PATTERN.matcher(response);
+        if (thoughtMatcher.find()) {
+            step.thought = thoughtMatcher.group(1).trim();
+        }
+
+        Matcher actionMatcher = ACTION_PATTERN.matcher(response);
+        if (actionMatcher.find()) {
+            step.action = actionMatcher.group(1).trim();
+        }
+
+        Matcher inputMatcher = ACTION_INPUT_PATTERN.matcher(response);
+        if (inputMatcher.find()) {
+            step.actionInput = inputMatcher.group(1).trim();
+        }
+
+        if (step.action == null || step.actionInput == null || !toolRegistry.hasTool(step.action)) {
+            logger.warn("No valid tool call parsed, treating LLM response as final answer at iteration {}", iteration);
+            step.isFinalAnswer = true;
+            step.finalAnswer = response.trim();
+        }
+
+        return step;
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // WebSocket push
+    // ─────────────────────────────────────────────────────────
+
+    private void pushEvent(WebSocketSession session, AgentEvent event) {
+        try {
+            String json = objectMapper.writeValueAsString(event.getPayload());
+            session.sendMessage(new TextMessage(json));
+        } catch (Exception e) {
+            logger.error("Failed to push agent event: {}", e.getMessage(), e);
+        }
+    }
+
+    private void streamText(WebSocketSession session, String text) throws InterruptedException {
+        int chunkSize = 30;
+        for (int i = 0; i < text.length(); i += chunkSize) {
+            if (agentStopService.shouldStop(session.getId())) break;
+
+            String chunk = text.substring(i, Math.min(i + chunkSize, text.length()));
+            try {
+                Map<String, String> payload = Map.of("chunk", chunk);
+                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+            } catch (Exception e) {
+                logger.error("Failed to stream text chunk: {}", e.getMessage(), e);
+                break;
+            }
+            if (i + chunkSize < text.length()) {
+                Thread.sleep(25);
+            }
+        }
+    }
+
+    private void sendCompletionNotification(WebSocketSession session) {
+        try {
+            Map<String, Object> notification = new HashMap<>();
+            notification.put("type", "completion");
+            notification.put("status", "finished");
+            notification.put("message", "响应已完成");
+            notification.put("timestamp", System.currentTimeMillis());
+            notification.put("date", java.time.LocalDateTime.now().toString());
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(notification)));
+        } catch (Exception e) {
+            logger.error("Failed to send completion notification: {}", e.getMessage(), e);
+        }
+    }
+
+    private void sendError(WebSocketSession session, String message) {
+        try {
+            Map<String, String> err = Map.of("error", message);
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(err)));
+        } catch (Exception e) {
+            logger.error("Failed to send error message: {}", e.getMessage(), e);
         }
     }
 }

@@ -28,6 +28,9 @@ public class Conversation {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String answer; // 系统回答内容
 
+    @Column(columnDefinition = "TEXT")
+    private String summary; // one-sentence summary for long-term memory injection
+
     @CreationTimestamp
     private LocalDateTime timestamp; // 对话时间戳
 }

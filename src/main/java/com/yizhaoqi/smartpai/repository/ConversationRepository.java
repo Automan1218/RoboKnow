@@ -1,7 +1,10 @@
 package com.yizhaoqi.smartpai.repository;
 
 import com.yizhaoqi.smartpai.model.Conversation;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -36,4 +39,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
      * @return 符合条件的对话记录列表
      */
     List<Conversation> findByTimestampBetween(LocalDateTime startDate, LocalDateTime endDate);
+
+    @Query("SELECT c FROM Conversation c WHERE c.user.id = :userId AND c.summary IS NOT NULL ORDER BY c.timestamp DESC")
+    List<Conversation> findRecentWithSummaryByUserId(@Param("userId") Long userId, Pageable pageable);
 }
