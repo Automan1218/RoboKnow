@@ -153,6 +153,7 @@ public class HybridSearchService {
                                 hit.source().isPublic()
                         );
                     })
+                    .filter(result -> isSearchResultAccessible(result, userDbId, userEffectiveTags))
                     .toList();
 
             logger.debug("返回搜索结果数量: {}", results.size());
@@ -257,6 +258,7 @@ public class HybridSearchService {
                                 hit.source().isPublic()
                         );
                     })
+                    .filter(result -> isSearchResultAccessible(result, userDbId, userEffectiveTags))
                     .toList();
 
             logger.debug("返回纯文本搜索结果数量: {}", results.size());
@@ -449,6 +451,20 @@ public class HybridSearchService {
             logger.error("获取用户数据库ID失败: {}", e.getMessage(), e);
             throw new RuntimeException("获取用户数据库ID失败", e);
         }
+    }
+
+    private boolean isSearchResultAccessible(SearchResult result, String userDbId, List<String> userEffectiveTags) {
+        if (result == null) {
+            return false;
+        }
+        if (userDbId != null && userDbId.equals(result.getUserId())) {
+            return true;
+        }
+        if (Boolean.TRUE.equals(result.getIsPublic())) {
+            return true;
+        }
+
+        return false;
     }
 
     private void attachFileNames(List<SearchResult> results) {

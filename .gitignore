@@ -76,3 +76,10 @@ frontend/src/typings/auto-imports.d.ts
 frontend/public/languages
 frontend/public/themes
 src/main/resources/application.yml~
+
+# Non-code files
+*.pdf
+paismart-*.html
+paismart-*.md
+project-milestones-board.html
+.claude/

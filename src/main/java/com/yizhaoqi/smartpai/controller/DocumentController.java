@@ -208,20 +208,22 @@ public class DocumentController {
     @GetMapping("/download")
     public ResponseEntity<?> downloadFileByName(
             @RequestParam String fileName,
-            @RequestParam(required = false) String token) {
+            @RequestParam(required = false) String token,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         
         LogUtils.PerformanceMonitor monitor = LogUtils.startPerformanceMonitor("DOWNLOAD_FILE_BY_NAME");
+        String resolvedToken = resolveToken(token, authorizationHeader);
         try {
             // 验证token并获取用户信息
             String userId = null;
             String orgTags = null;
             
-            if (token != null && !token.trim().isEmpty()) {
+            if (resolvedToken != null && !resolvedToken.trim().isEmpty()) {
                 try {
                     // 解析JWT token获取用户信息
                     // 注意：JWT中的sub字段存储用户名，userId字段存储用户ID（但有时可能存储的是用户名）
-                    userId = jwtUtils.extractUsernameFromToken(token);
-                    orgTags = jwtUtils.extractOrgTagsFromToken(token);
+                    userId = jwtUtils.extractUsernameFromToken(resolvedToken);
+                    orgTags = jwtUtils.extractOrgTagsFromToken(resolvedToken);
                 } catch (Exception e) {
                     LogUtils.logBusiness("DOWNLOAD_FILE_BY_NAME", "anonymous", "Token解析失败: fileName=%s", fileName);
                 }
@@ -309,8 +311,8 @@ public class DocumentController {
         } catch (Exception e) {
             String userId = "unknown";
             try {
-                if (token != null && !token.trim().isEmpty()) {
-                    userId = jwtUtils.extractUsernameFromToken(token);
+                if (resolvedToken != null && !resolvedToken.trim().isEmpty()) {
+                    userId = jwtUtils.extractUsernameFromToken(resolvedToken);
                 }
             } catch (Exception ignored) {}
             
@@ -333,9 +335,11 @@ public class DocumentController {
     @GetMapping("/preview")
     public ResponseEntity<?> previewFileByName(
             @RequestParam String fileName,
-            @RequestParam(required = false) String token) {
+            @RequestParam(required = false) String token,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
         
         LogUtils.PerformanceMonitor monitor = LogUtils.startPerformanceMonitor("PREVIEW_FILE_BY_NAME");
+        String resolvedToken = resolveToken(token, authorizationHeader);
         try {
             // 验证token并获取用户信息
             String userId = null;
@@ -359,10 +363,10 @@ public class DocumentController {
             }
             
             // 如果Security上下文中没有用户信息，尝试从URL参数token中获取
-            if (userId == null && token != null && !token.trim().isEmpty()) {
+            if (userId == null && resolvedToken != null && !resolvedToken.trim().isEmpty()) {
                 try {
-                    userId = jwtUtils.extractUsernameFromToken(token);
-                    orgTags = jwtUtils.extractOrgTagsFromToken(token);
+                    userId = jwtUtils.extractUsernameFromToken(resolvedToken);
+                    orgTags = jwtUtils.extractOrgTagsFromToken(resolvedToken);
                 } catch (Exception e) {
                     LogUtils.logBusiness("PREVIEW_FILE_BY_NAME", "anonymous", "Token解析失败: fileName=%s", fileName);
                 }
@@ -449,8 +453,8 @@ public class DocumentController {
         } catch (Exception e) {
             String userId = "unknown";
             try {
-                if (token != null && !token.trim().isEmpty()) {
-                    userId = jwtUtils.extractUsernameFromToken(token);
+                if (resolvedToken != null && !resolvedToken.trim().isEmpty()) {
+                    userId = jwtUtils.extractUsernameFromToken(resolvedToken);
                 }
             } catch (Exception ignored) {}
             
@@ -463,6 +467,16 @@ public class DocumentController {
         }
     }
     
+    private String resolveToken(String token, String authorizationHeader) {
+        if (token != null && !token.trim().isEmpty()) {
+            return token.trim();
+        }
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            return authorizationHeader.substring(7).trim();
+        }
+        return null;
+    }
+
     /**
      * 根据tagId获取tagName
      *

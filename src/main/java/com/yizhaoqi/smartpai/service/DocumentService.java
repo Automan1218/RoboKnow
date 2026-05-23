@@ -50,6 +50,17 @@ public class DocumentService {
     @Autowired
     private UserRepository userRepository;
 
+    private User resolveUser(String userIdOrUsername) {
+        try {
+            Long id = Long.parseLong(userIdOrUsername);
+            return userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("用户不存在: " + userIdOrUsername));
+        } catch (NumberFormatException e) {
+            return userRepository.findByUsername(userIdOrUsername)
+                    .orElseThrow(() -> new RuntimeException("用户不存在: " + userIdOrUsername));
+        }
+    }
+
     /**
      * 删除文档及其相关数据
      * 该方法将删除:
@@ -126,8 +137,9 @@ public class DocumentService {
         
         try {
             // 获取用户有效的组织标签（包含层级关系）
-            User user = userRepository.findByUsername(userId)
-                .orElseThrow(() -> new RuntimeException("用户不存在: " + userId));
+            User user = resolveUser(userId);
+            String dbUserId = user.getId().toString();
+            List<String> ownerIds = List.of(dbUserId, user.getUsername());
             
             List<String> userEffectiveTags = orgTagCacheService.getUserEffectiveOrgTags(user.getUsername());
             logger.debug("用户有效组织标签: {}", userEffectiveTags);
@@ -136,11 +148,11 @@ public class DocumentService {
             List<FileUpload> files;
             if (userEffectiveTags.isEmpty()) {
                 // 如果用户没有任何组织标签，只返回自己的文件和公开文件
-                files = fileUploadRepository.findByUserIdOrIsPublicTrue(userId);
+                files = fileUploadRepository.findByUserIdInOrIsPublicTrue(ownerIds);
                 logger.debug("用户无组织标签，仅返回个人和公开文件");
             } else {
                 // 查询用户可访问的所有文件（考虑层级标签）
-                files = fileUploadRepository.findAccessibleFilesWithTags(userId, userEffectiveTags);
+                files = fileUploadRepository.findAccessibleFilesWithTags(ownerIds);
                 logger.debug("使用有效组织标签查询文件");
             }
             
@@ -162,7 +174,8 @@ public class DocumentService {
         logger.info("获取用户上传的文件列表: userId={}", userId);
         
         try {
-            List<FileUpload> files = fileUploadRepository.findByUserId(userId);
+            User user = resolveUser(userId);
+            List<FileUpload> files = fileUploadRepository.findByUserIdIn(List.of(user.getId().toString(), user.getUsername()));
             logger.info("成功获取用户上传的文件列表: userId={}, fileCount={}", userId, files.size());
             return files;
         } catch (Exception e) {

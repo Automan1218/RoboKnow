@@ -130,11 +130,8 @@ public class OrgTagAuthorizationFilter extends OncePerRequestFilter {
             
             String resourceOrgTag = resourceInfo.getOrgTag();
             
-            // 如果是公开资源、资源没有组织标签、或属于默认组织，直接放行
-            if (resourceInfo.isPublic() || 
-                resourceOrgTag == null || 
-                resourceOrgTag.isEmpty() || 
-                DEFAULT_ORG_TAG.equals(resourceOrgTag)) {
+            // 如果是公开资源，直接放行；非公开文件只允许 owner 访问
+            if (resourceInfo.isPublic()) {
                 logger.debug("资源是公开的或无组织标签或属于默认组织，放行请求");
                 filterChain.doFilter(request, response);
                 return;
@@ -150,12 +147,20 @@ public class OrgTagAuthorizationFilter extends OncePerRequestFilter {
             
             // 获取用户名和角色
             String username = jwtUtils.extractUsernameFromToken(token);
+            String tokenUserId = jwtUtils.extractUserIdFromToken(token);
             String role = jwtUtils.extractRoleFromToken(token);
             
             // 如果是资源拥有者，直接放行
-            if (username != null && username.equals(resourceInfo.getOwner())) {
+            if ((username != null && username.equals(resourceInfo.getOwner())) ||
+                (tokenUserId != null && tokenUserId.equals(resourceInfo.getOwner()))) {
                 logger.debug("用户是资源拥有者，放行请求");
                 filterChain.doFilter(request, response);
+                return;
+            }
+
+            if (!resourceInfo.isPublic()) {
+                logger.debug("Private resource denied because requester is not the owner");
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 return;
             }
             
