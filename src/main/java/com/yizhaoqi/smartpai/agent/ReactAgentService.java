@@ -3,7 +3,7 @@ package com.yizhaoqi.smartpai.agent;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yizhaoqi.smartpai.agent.tool.ToolRegistry;
-import com.yizhaoqi.smartpai.client.DeepSeekClient;
+import com.yizhaoqi.smartpai.client.OpenAiClient;
 import com.yizhaoqi.smartpai.service.AgentStopService;
 import com.yizhaoqi.smartpai.service.ConversationService;
 import org.slf4j.Logger;
@@ -51,19 +51,19 @@ public class ReactAgentService {
     private static final Pattern FINAL_ANSWER_PATTERN =
         Pattern.compile("Final Answer:\\s*(.+?)$", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
-    private final DeepSeekClient deepSeekClient;
+    private final OpenAiClient openAiClient;
     private final ToolRegistry toolRegistry;
     private final AgentStopService agentStopService;
     private final RedisTemplate<String, String> redisTemplate;
     private final ConversationService conversationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ReactAgentService(DeepSeekClient deepSeekClient,
+    public ReactAgentService(OpenAiClient openAiClient,
                              ToolRegistry toolRegistry,
                              AgentStopService agentStopService,
                              RedisTemplate<String, String> redisTemplate,
                              ConversationService conversationService) {
-        this.deepSeekClient = deepSeekClient;
+        this.openAiClient = openAiClient;
         this.toolRegistry = toolRegistry;
         this.agentStopService = agentStopService;
         this.redisTemplate = redisTemplate;
@@ -111,7 +111,7 @@ public class ReactAgentService {
             pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.THINKING, i + 1));
             logger.debug("ReAct iteration {}: calling LLM", i + 1);
 
-            String llmResponse = deepSeekClient.chatBlocking(messages);
+            String llmResponse = openAiClient.chatBlocking(messages);
             if (llmResponse.isBlank()) {
                 logger.warn("LLM returned empty response at iteration {}", i + 1);
                 break;
@@ -249,7 +249,7 @@ public class ReactAgentService {
                 Map.of("role", "user", "content",
                        "问题：" + question + "\n回答：" + snippet)
             );
-            String summary = deepSeekClient.chatBlocking(req);
+            String summary = openAiClient.chatBlocking(req);
             if (summary == null || summary.isBlank()) {
                 summary = question.length() > 120 ? question.substring(0, 120) + "..." : question;
             }
@@ -298,7 +298,7 @@ public class ReactAgentService {
                        "Summarize the following conversation history in 3-5 sentences, preserving key facts and context needed to understand the ongoing conversation."),
                 Map.of("role", "user", "content", input.toString())
             );
-            String newSummary = deepSeekClient.chatBlocking(req);
+            String newSummary = openAiClient.chatBlocking(req);
             if (newSummary != null && !newSummary.isBlank()) {
                 redisTemplate.opsForValue().set(stmSummaryKey(conversationId), newSummary, Duration.ofDays(7));
                 logger.debug("STM compressed {} messages into summary for conversation {}", toCompress.size(), conversationId);

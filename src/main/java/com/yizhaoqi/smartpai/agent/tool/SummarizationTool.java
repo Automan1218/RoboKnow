@@ -1,7 +1,7 @@
 package com.yizhaoqi.smartpai.agent.tool;
 
 import com.yizhaoqi.smartpai.agent.AgentContext;
-import com.yizhaoqi.smartpai.client.DeepSeekClient;
+import com.yizhaoqi.smartpai.client.OpenAiClient;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -10,10 +10,10 @@ import java.util.Map;
 @Component
 public class SummarizationTool implements AgentTool {
 
-    private final DeepSeekClient deepSeekClient;
+    private final OpenAiClient openAiClient;
 
-    public SummarizationTool(DeepSeekClient deepSeekClient, ToolRegistry toolRegistry) {
-        this.deepSeekClient = deepSeekClient;
+    public SummarizationTool(OpenAiClient openAiClient, ToolRegistry toolRegistry) {
+        this.openAiClient = openAiClient;
         toolRegistry.register(this);
     }
 
@@ -37,7 +37,7 @@ public class SummarizationTool implements AgentTool {
                    "你是文档摘要助手。请对以下文本提取关键信息并做简洁摘要，控制在300字以内，保留重要数据、结论和关键点。"),
             Map.of("role", "user", "content", input)
         );
-        String summary = deepSeekClient.chatBlocking(messages);
+        String summary = openAiClient.chatBlocking(messages);
         return summary.isBlank() ? "摘要生成失败，请重试" : "摘要：" + summary;
     }
 }

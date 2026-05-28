@@ -18,39 +18,39 @@ import org.slf4j.LoggerFactory;
 import com.yizhaoqi.smartpai.config.AiProperties;
 
 @Service
-public class DeepSeekClient {
+public class OpenAiClient {
 
     private final WebClient webClient;
     private final String apiKey;
     private final String model;
     private final AiProperties aiProperties;
-    private static final Logger logger = LoggerFactory.getLogger(DeepSeekClient.class);
-    
-    public DeepSeekClient(@Value("${deepseek.api.url}") String apiUrl,
-                         @Value("${deepseek.api.key}") String apiKey,
-                         @Value("${deepseek.api.model}") String model,
+    private static final Logger logger = LoggerFactory.getLogger(OpenAiClient.class);
+
+    public OpenAiClient(@Value("${openai.api.url}") String apiUrl,
+                         @Value("${openai.api.key}") String apiKey,
+                         @Value("${openai.api.model}") String model,
                          AiProperties aiProperties) {
         WebClient.Builder builder = WebClient.builder().baseUrl(apiUrl);
-        
+
         // 只有当 API key 不为空时才添加 Authorization header
         if (apiKey != null && !apiKey.trim().isEmpty()) {
             builder.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
         }
-        
+
         this.webClient = builder.build();
         this.apiKey = apiKey;
         this.model = model;
         this.aiProperties = aiProperties;
     }
-    
-    public void streamResponse(String userMessage, 
+
+    public void streamResponse(String userMessage,
                              String context,
                              List<Map<String, String>> history,
                              Consumer<String> onChunk,
                              Consumer<Throwable> onError) {
-        
+
         Map<String, Object> request = buildRequest(userMessage, context, history);
-        
+
         webClient.post()
                 .uri("/chat/completions")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -62,15 +62,15 @@ public class DeepSeekClient {
                     onError
                 );
     }
-    
-    private Map<String, Object> buildRequest(String userMessage, 
+
+    private Map<String, Object> buildRequest(String userMessage,
                                            String context,
                                            List<Map<String, String>> history) {
-        logger.info("构建请求，用户消息：{}，上下文长度：{}，历史消息数：{}", 
-                   userMessage, 
-                   context != null ? context.length() : 0, 
+        logger.info("构建请求，用户消息：{}，上下文长度：{}，历史消息数：{}",
+                   userMessage,
+                   context != null ? context.length() : 0,
                    history != null ? history.size() : 0);
-        
+
         Map<String, Object> request = new java.util.HashMap<>();
         request.put("model", model);
         request.put("messages", buildMessages(userMessage, context, history));
@@ -88,7 +88,7 @@ public class DeepSeekClient {
         }
         return request;
     }
-    
+
     private List<Map<String, String>> buildMessages(String userMessage,
                                                   String context,
                                                   List<Map<String, String>> history) {
@@ -136,7 +136,7 @@ public class DeepSeekClient {
 
         return messages;
     }
-    
+
     /**
      * 同步阻塞调用（非流式），用于 ReAct 中间推理步骤。
      * 使用 stream:false，直接返回完整响应文本。
@@ -187,7 +187,7 @@ public class DeepSeekClient {
                 logger.debug("对话结束");
                 return;
             }
-            
+
             // 直接解析 JSON
             ObjectMapper mapper = new ObjectMapper();
             JsonNode node = mapper.readTree(chunk);
@@ -196,7 +196,7 @@ public class DeepSeekClient {
                                .path("delta")
                                .path("content")
                                .asText("");
-            
+
             if (!content.isEmpty()) {
                 onChunk.accept(content);
             }
@@ -204,4 +204,4 @@ public class DeepSeekClient {
             logger.error("处理数据块时出错: {}", e.getMessage(), e);
         }
     }
-} 
+}

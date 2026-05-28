@@ -64,7 +64,7 @@ public class VectorizationService {
                             chunks.get(i).getChunkId(),
                             chunks.get(i).getContent(),
                             vectors.get(i),
-                            "deepseek-embed", // 更新为 DeepSeek 的模型版本
+                            "openai-text-embedding-3-large", // 向量模型版本标记
                             userId,
                             orgTag,
                             isPublic

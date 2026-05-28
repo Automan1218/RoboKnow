@@ -67,7 +67,7 @@ public class EmbeddingClient {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", modelId);
         requestBody.put("input", batch);
-        requestBody.put("dimension", dimension);  // 直接在根级别设置dimension
+        requestBody.put("dimensions", dimension);  // OpenAI 用 dimensions（复数），仅 text-embedding-3-* 支持
         requestBody.put("encoding_format", "float");  // 添加编码格式
 
         return webClient.post()
