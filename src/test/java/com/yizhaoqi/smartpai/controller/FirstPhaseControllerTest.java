@@ -252,15 +252,15 @@ class FirstPhaseControllerTest {
 
         when(fileUploadRepository.findByFileNameAndIsPublicTrue("doc.txt")).thenReturn(Optional.of(file));
         when(documentService.generateDownloadUrl("md5")).thenReturn("http://download");
-        assertEquals(HttpStatus.OK, documentController.downloadFileByName("doc.txt", null).getStatusCode());
+        assertEquals(HttpStatus.OK, documentController.downloadFileByName("doc.txt", null, null).getStatusCode());
 
         when(jwtUtils.extractUsernameFromToken("token")).thenReturn("alice");
         when(jwtUtils.extractOrgTagsFromToken("token")).thenReturn("ORG");
-        assertEquals(HttpStatus.OK, documentController.downloadFileByName("doc.txt", "token").getStatusCode());
+        assertEquals(HttpStatus.OK, documentController.downloadFileByName("doc.txt", "token", null).getStatusCode());
 
         when(documentService.getFilePreviewContent("md5", "doc.txt")).thenReturn("hello");
-        assertEquals(HttpStatus.OK, documentController.previewFileByName("doc.txt", null).getStatusCode());
-        assertEquals(HttpStatus.OK, documentController.previewFileByName("doc.txt", "token").getStatusCode());
+        assertEquals(HttpStatus.OK, documentController.previewFileByName("doc.txt", null, null).getStatusCode());
+        assertEquals(HttpStatus.OK, documentController.previewFileByName("doc.txt", "token", null).getStatusCode());
     }
 
     @Test
