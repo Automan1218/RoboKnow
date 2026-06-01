@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>RoboKnow - Physical Architecture (fixed)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#dde3ec;font-family:'Segoe UI',Inter,system-ui,sans-serif;padding:16px;color:#0f172a;}
+.frame{max-width:1280px;margin:0 auto;background:#f0f4f8;border-radius:16px;box-shadow:0 8px 32px rgba(15,23,42,.16);overflow:hidden;}
+.frame-bar{height:44px;background:#e2e8f0;border-bottom:1.5px solid #cbd5e1;display:flex;align-items:center;gap:8px;padding:0 16px;}
+.dots{display:flex;gap:6px;}
+.dot{width:12px;height:12px;border-radius:50%;}
+.dot-r{background:#ef4444;}.dot-y{background:#f59e0b;}.dot-g{background:#22c55e;}
+.frame-title{margin-left:12px;font-size:12px;font-weight:800;color:#334155;}
+.frame-url{margin-left:10px;background:#fff;border:1px solid #e2e8f0;border-radius:5px;padding:3px 12px;font-size:11px;color:#64748b;}
+.diagram{position:relative;width:1240px;height:1000px;background:#fff;overflow:hidden;}
+
+/* ---- containers ---- */
+.cloud{position:absolute;left:395px;top:55px;width:700px;height:905px;border:2.5px solid #2563eb;border-radius:14px;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);}
+.cloud-title{position:absolute;left:24px;top:11px;display:flex;align-items:center;gap:10px;font-size:19px;font-weight:900;color:#0f2d6b;z-index:8;}
+.cloud-icon{font-size:24px;}
+.vpc{position:absolute;left:415px;top:126px;width:660px;height:824px;border:1.8px solid #60a5fa;border-radius:13px;background:rgba(255,255,255,.55);}
+.vpc-title{position:absolute;left:16px;top:12px;font-size:18px;font-weight:900;color:#1d4ed8;}
+.vpc-title span{font-size:22px;margin-right:8px;}
+.host{position:absolute;left:438px;top:182px;width:322px;height:742px;border:1.8px dashed #3b82f6;border-radius:13px;background:#f8fbff;}
+.host-title{position:absolute;left:16px;top:14px;font-size:15px;font-weight:900;color:#1d4ed8;line-height:1.3;}
+.host-title span{font-size:20px;margin-right:6px;}
+.host-sub{position:absolute;left:16px;top:54px;background:#eff6ff;border:1.4px solid #93c5fd;border-radius:6px;color:#1d4ed8;font-size:10px;font-weight:800;padding:2px 9px;}
+
+/* ---- badges row (inside cloud, below title, not over it) ---- */
+.badge-row{position:absolute;left:470px;top:99px;display:flex;gap:8px;z-index:7;}
+.badge{background:#f0fdf4;border:1.4px solid #86efac;border-radius:6px;color:#15803d;font-size:9.5px;font-weight:800;padding:4px 9px;}
+
+.node{position:absolute;border-radius:9px;background:#fff;border:1.8px solid #2563eb;box-shadow:0 10px 26px rgba(37,99,235,.07);z-index:4;}
+.node-title{font-size:15px;font-weight:900;color:#0f2d6b;line-height:1.25;}
+.node-sub{font-size:11px;color:#1e3a8a;line-height:1.45;margin-top:6px;}
+.node-icon{font-size:31px;line-height:1;margin-bottom:9px;}
+
+.browser{left:40px;top:405px;width:130px;height:150px;text-align:center;padding:19px 10px;}
+.cloudflare{left:235px;top:415px;width:140px;height:130px;border-color:#0ea5e9;text-align:center;padding:15px 10px;background:#f0f9ff;}
+.cloudflare .node-title{color:#0369a1;}
+
+.frontend{left:458px;top:260px;width:282px;height:118px;border-color:#2563eb;background:#f8fbff;padding:14px 16px 12px 70px;}
+.frontend .node-icon{position:absolute;left:18px;top:26px;margin:0;font-size:33px;}
+.frontend-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:11px;}
+.chip{border:1px solid #2563eb;color:#1d4ed8;background:#fff;border-radius:6px;padding:4px 5px;font-size:10px;font-weight:800;text-align:center;line-height:1.1;}
+
+.backend{left:458px;top:390px;width:282px;height:232px;border-color:#0f766e;background:#f0fdfa;padding:14px 16px 14px 70px;}
+.backend .node-title{color:#134e4a;}
+.backend .node-sub{color:#115e59;}
+.backend .node-icon{position:absolute;left:18px;top:38px;margin:0;font-size:34px;}
+.backend-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px;}
+.backend-actions .chip{border-color:#0f766e;color:#0f766e;}
+
+.pipeline{position:absolute;left:466px;top:634px;width:266px;height:80px;border:1.8px dashed #7c3aed;border-radius:11px;background:rgba(250,245,255,.98);padding:8px;text-align:center;z-index:5;}
+.pipeline-title{font-size:10.5px;font-weight:900;color:#5b21b6;line-height:1.2;margin-bottom:6px;}
+.agent-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;}
+.agent{background:#fff;border:1.4px solid #a78bfa;border-radius:7px;padding:4px 3px;color:#4c1d95;font-size:8px;font-weight:900;line-height:1.15;}
+.agent span{display:block;font-size:13px;line-height:1;margin-bottom:3px;}
+
+.kafka{left:478px;top:730px;width:250px;height:58px;border-color:#7c3aed;padding:9px 12px 9px 60px;z-index:4;}
+.kafka .node-icon{position:absolute;left:16px;top:16px;margin:0;font-size:28px;}
+.kafka .node-title{font-size:13px;color:#5b21b6;}
+.kafka .node-sub{font-size:10px;color:#4c1d95;margin-top:3px;}
+
+/* ---- storage column: clearly INSIDE the VPC, right of the host ---- */
+.storage{left:800px;width:252px;height:92px;padding:14px 14px 12px 72px;border-color:#94a3b8;}
+.storage .node-icon{position:absolute;left:18px;top:25px;margin:0;font-size:34px;}
+.storage .node-title{font-size:15px;}
+.storage .node-sub{font-size:10.5px;color:#334155;margin-top:5px;}
+.mysql{top:195px;border-color:#3b82f6;}
+.minio{top:315px;border-color:#06b6d4;}
+.es{top:435px;border-color:#f59e0b;}
+.redis{top:555px;border-color:#ef4444;}
+
+/* ---- external LLM: clearly OUTSIDE the cloud ---- */
+.openai{left:1102px;top:65px;width:130px;min-height:120px;border:2px dashed #c026d3;background:#fdf4ff;text-align:center;padding:13px 12px;border-radius:9px;z-index:4;}
+.openai .ot{color:#86198f;font-size:14px;font-weight:900;line-height:1.2;}
+.openai-model{background:#fff;border:1px solid #e9d5ff;border-radius:6px;color:#6d28d9;font-size:10.5px;font-weight:800;padding:5px;margin-top:7px;}
+
+.caption{position:absolute;left:410px;bottom:14px;width:720px;border-top:1.5px solid #93c5fd;text-align:center;color:#1e3a8a;font-size:12px;font-style:italic;padding-top:10px;}
+.caption-cloud{background:#fff;display:inline-block;position:relative;top:-22px;padding:0 18px;font-size:20px;color:#2563eb;font-style:normal;}
+
+.arrow-label{position:absolute;z-index:7;background:#fff;color:#1d4ed8;font-size:10px;font-weight:800;line-height:1.22;padding:3px 6px;border-radius:5px;text-align:center;border:1px solid #e5edf7;}
+.muted-label{color:#64748b;font-weight:700;}
+
+svg{position:absolute;left:0;top:0;width:1240px;height:1000px;z-index:2;pointer-events:none;}
+.line{stroke:#2563eb;stroke-width:2.2;fill:none;}
+.dash{stroke:#2563eb;stroke-width:2;fill:none;stroke-dasharray:7 6;}
+.teal{stroke:#0f766e;}
+.purple{stroke:#7c3aed;}
+.orange{stroke:#f97316;}
+.red{stroke:#ef4444;}
+.cyan{stroke:#06b6d4;}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="frame-bar">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    <div class="frame-title">RoboKnow - Physical Architecture</div>
+    <div class="frame-url">Cloudflare · AWS EC2 ap-east-1 · Docker Compose · Frontend / Backend separated</div>
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1240 1000">
+      <defs>
+        <marker id="aBlue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#2563eb"/></marker>
+        <marker id="aRed" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#ef4444"/></marker>
+        <marker id="aTeal" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#0f766e"/></marker>
+        <marker id="aPurple" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#7c3aed"/></marker>
+        <marker id="aOrange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#f97316"/></marker>
+        <marker id="aCyan" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#06b6d4"/></marker>
+      </defs>
+
+      <!-- ingress: browser -> cloudflare -> frontend -->
+      <path class="line" marker-end="url(#aBlue)" d="M170 480 H235"/>
+      <path class="line" marker-end="url(#aBlue)" d="M375 470 H432 V319 H458"/>
+
+      <!-- frontend -> backend (API / WS) -->
+      <path class="line teal" marker-end="url(#aTeal)" d="M599 378 V390"/>
+
+      <!-- backend -> persistent stores (each to its OWN store) -->
+      <path class="line"       marker-end="url(#aBlue)"   d="M740 418 H772 V241 H800"/>
+      <path class="line cyan"  marker-end="url(#aCyan)"   d="M740 458 H784 V361 H800"/>
+      <path class="line orange" marker-end="url(#aOrange)" d="M740 481 H800"/>
+      <path class="line red"   marker-end="url(#aRed)"    d="M740 540 H776 V601 H800"/>
+
+      <!-- backend -> External LLM (routed around the frontend box, exits the cloud) -->
+      <path class="dash purple" marker-end="url(#aPurple)" d="M458 432 H446 V160 H1102"/>
+
+      <!-- backend -> browser (WebSocket streaming, outside cloud on the left) -->
+      <path class="dash" marker-end="url(#aBlue)" d="M458 575 H380 V690 H105 V557"/>
+
+      <!-- async indexing: pipeline -> Kafka -> Elasticsearch -->
+      <path class="line purple" marker-end="url(#aPurple)" d="M597 714 V730"/>
+      <path class="line orange" marker-end="url(#aOrange)" d="M728 759 H760 V521 H800"/>
+
+      <!-- faint nesting connector backend -> pipeline -->
+      <path d="M599 622 V634" stroke="#a78bfa" stroke-width="1.4" stroke-dasharray="3 4" fill="none"/>
+    </svg>
+
+    <div class="cloud"><div class="cloud-title"><span class="cloud-icon">&#9729;&#65039;</span>AWS Cloud · ap-east-1</div></div>
+    <div class="vpc"><div class="vpc-title"><span>&#9638;</span>VPC</div></div>
+    <div class="host">
+      <div class="host-title"><span>&#128421;&#65039;</span>EC2 · Docker Compose Host</div>
+      <div class="host-sub">Docker Compose on one EC2 node</div>
+    </div>
+
+    <div class="badge-row">
+      <div class="badge">VPC 10.0.0.0/16</div>
+      <div class="badge">Subnet 10.0.1.0/24</div>
+      <div class="badge">SG: 443 / 8080 / 22</div>
+      <div class="badge">Docker Bridge 172.18.0.0/16</div>
+    </div>
+
+    <div class="node browser">
+      <div class="node-icon">&#127760;</div>
+      <div class="node-title">User Browser</div>
+      <div class="node-sub">Vue SPA rendered<br>API + WebSocket</div>
+    </div>
+
+    <div class="node cloudflare">
+      <div class="node-icon">&#128737;&#65039;</div>
+      <div class="node-title">Cloudflare</div>
+      <div class="node-sub">DNS proxy<br>TLS · WAF · DDoS<br>rate / bot rules</div>
+    </div>
+
+    <div class="node frontend">
+      <div class="node-icon">&#129513;</div>
+      <div class="node-title">frontend deployment / service</div>
+      <div class="node-sub">Vue 3 + TypeScript + Vite · Nginx static</div>
+      <div class="frontend-actions">
+        <div class="chip">Login</div><div class="chip">Upload</div><div class="chip">Search</div><div class="chip">Chat</div>
+      </div>
+    </div>
+
+    <div class="node backend">
+      <div class="node-icon">&#11042;</div>
+      <div class="node-title">backend deployment / service</div>
+      <div class="node-sub">Spring Boot 3 monolith<br>REST API + WebSocket + JWT</div>
+      <div class="backend-actions">
+        <div class="chip">Auth</div><div class="chip">Upload</div><div class="chip">RAG</div><div class="chip">Agent</div>
+      </div>
+    </div>
+
+    <div class="pipeline">
+      <div class="pipeline-title">AI / document pipeline (inside backend)</div>
+      <div class="agent-grid">
+        <div class="agent"><span>&#128272;</span>JWT<br>filter</div>
+        <div class="agent"><span>&#128228;</span>Upload<br>service</div>
+        <div class="agent"><span>&#128209;</span>Tika<br>parser</div>
+        <div class="agent"><span>&#128172;</span>RAG<br>chat</div>
+      </div>
+    </div>
+
+    <div class="node kafka">
+      <div class="node-icon">&#128228;</div>
+      <div class="node-title">Kafka 3.2</div>
+      <div class="node-sub">async file-processing-topic1</div>
+    </div>
+
+    <div class="node openai">
+      <div class="ot">&#129302; External LLM APIs</div>
+      <div class="openai-model">GPT-4o-mini</div>
+      <div class="openai-model">text-embedding-3-large</div>
+    </div>
+
+    <div class="node storage mysql">
+      <div class="node-icon">&#128043;</div>
+      <div class="node-title">MySQL 8.0</div>
+      <div class="node-sub">users · file_upload<br>chunk_info · conversations</div>
+    </div>
+    <div class="node storage minio">
+      <div class="node-icon">&#128451;&#65039;</div>
+      <div class="node-title">MinIO</div>
+      <div class="node-sub">uploaded chunks · merged files</div>
+    </div>
+    <div class="node storage es">
+      <div class="node-icon">&#128269;</div>
+      <div class="node-title">Elasticsearch</div>
+      <div class="node-sub">vector store · kNN + BM25 hybrid</div>
+    </div>
+    <div class="node storage redis">
+      <div class="node-icon">&#128308;</div>
+      <div class="node-title">Redis 7.0</div>
+      <div class="node-sub">JWT blacklist · chunk bitmap · ACL</div>
+    </div>
+
+    <!-- labels -->
+    <div class="arrow-label" style="left:178px;top:452px;">HTTPS / WSS</div>
+    <div class="arrow-label muted-label" style="left:382px;top:360px;">Cloudflare proxy<br>to EC2 :8080</div>
+    <div class="arrow-label" style="left:744px;top:362px;color:#0f766e;">API / WS</div>
+    <div class="arrow-label" style="left:746px;top:398px;">metadata +<br>conversation</div>
+    <div class="arrow-label" style="left:746px;top:448px;color:#0e7490;">files</div>
+    <div class="arrow-label" style="left:746px;top:472px;color:#b45309;">vectors</div>
+    <div class="arrow-label" style="left:746px;top:528px;color:#b91c1c;">JWT / cache</div>
+    <div class="arrow-label" style="left:735px;top:735px;color:#6d28d9;">Kafka parse<br>then vectorize</div>
+    <div class="arrow-label" style="left:935px;top:138px;color:#86198f;">HTTPS · LLM<br>+ embeddings</div>
+    <div class="arrow-label" style="left:120px;top:620px;">WebSocket streaming<br>progressive answers</div>
+
+    <div class="caption"><span class="caption-cloud">&#9729;&#65039;</span></div>
+  </div>
+</div>
+</body>
+</html>

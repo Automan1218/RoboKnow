@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>RoboKnow – DDD</title>
+<style>
+:root{--ink:#111827;--muted:#64748b;--line:#e2e8f0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#d8e2ec;font-family:Inter,'Segoe UI',system-ui,sans-serif;padding:16px;}
+.slide{background:#f8fafc;border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.10);
+  padding:20px 22px 22px;max-width:980px;margin:0 auto 20px;}
+.sh{font-size:19px;font-weight:900;color:var(--ink);margin-bottom:2px;}
+.ss{font-size:11px;color:var(--muted);margin-bottom:16px;}
+
+/* ── SLIDE 1: Context Map ── */
+.cmap{display:grid;grid-template-columns:220px 90px 220px;
+  grid-template-rows:auto 36px auto 36px auto;
+  align-items:center;justify-items:center;
+  width:530px;margin:0 auto;}
+.cbox{border:2px solid;border-radius:8px;padding:10px 14px;width:220px;}
+.cbox-t{font-size:12px;font-weight:800;margin-bottom:4px;}
+.cbox-s{font-size:10px;color:var(--muted);}
+.cbox-id{border-color:#3b82f6;background:#eff6ff;}
+.cbox-id .cbox-t{color:#1e3a8a;}
+.cbox-org{border-color:#16a34a;background:#f0fdf4;}
+.cbox-org .cbox-t{color:#14532d;}
+.cbox-doc{border-color:#ea580c;background:#fff7ed;}
+.cbox-doc .cbox-t{color:#7c2d12;}
+.cbox-know{border-color:#ca8a04;background:#fefce8;}
+.cbox-know .cbox-t{color:#713f12;}
+.cbox-chat{border-color:#7c3aed;background:#faf5ff;}
+.cbox-chat .cbox-t{color:#581c87;}
+.carr-h{font-size:13px;color:#64748b;font-weight:700;text-align:center;line-height:1.5;}
+.carr-h .cl{font-size:9px;color:#94a3b8;font-style:italic;display:block;}
+.carr-v{font-size:13px;color:#64748b;font-weight:700;text-align:center;line-height:1.4;}
+.carr-v .cl{font-size:9px;color:#94a3b8;font-style:italic;display:block;}
+.clegend{display:flex;gap:16px;margin-top:18px;justify-content:center;flex-wrap:wrap;}
+.cleg{font-size:10px;color:var(--muted);display:flex;align-items:flex-start;gap:5px;}
+.cleg b{color:var(--ink);white-space:nowrap;}
+
+/* ── SLIDE 2: 4-layer ── */
+.arch{display:flex;gap:12px;}
+.layers{flex:1;border:2px solid #cbd5e1;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;}
+.layer{display:flex;}
+.layer+.layer{border-top:2px solid #cbd5e1;}
+.ltag{width:68px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;padding:8px 4px;font-size:10.5px;
+  font-weight:800;border-right:2px solid;line-height:1.4;}
+.lbody{flex:1;display:flex;flex-wrap:wrap;gap:7px;padding:9px 11px;align-items:flex-start;}
+.l-api .ltag{background:#fefce8;border-color:#ca8a04;color:#713f12;}
+.l-api .lbody{background:#fefce8;}
+.l-app .ltag{background:#eff6ff;border-color:#3b82f6;color:#1e3a8a;}
+.l-app .lbody{background:#eff6ff;}
+.l-dom .ltag{background:#fff7ed;border-color:#ea580c;color:#7c2d12;}
+.l-dom .lbody{background:#fff7ed;}
+.l-inf .ltag{background:#f0fdf4;border-color:#16a34a;color:#14532d;}
+.l-inf .lbody{background:#f0fdf4;}
+.larr{background:#f1f5f9;border-left:2px solid #cbd5e1;border-right:2px solid #cbd5e1;
+  display:flex;align-items:center;min-height:20px;padding:0 0 0 8px;position:relative;}
+.larr::before{content:'▼';position:absolute;left:22px;color:#94a3b8;font-size:11px;}
+.larr span{font-size:10px;color:#94a3b8;font-style:italic;margin-left:46px;}
+.cb{background:rgba(255,255,255,.85);border:1.5px solid rgba(0,0,0,.12);border-radius:5px;padding:5px 8px;}
+.cb-t{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px;}
+.cb-i{font-size:10px;line-height:1.5;color:var(--ink);}
+.cb-ar{border:2.5px solid var(--ink);}
+.cb-vo{border-style:dashed;border-color:rgba(109,40,217,.55);}
+.cb-ev{border-style:dashed;border-color:rgba(190,24,93,.55);}
+.cb-ex{border-style:dashed;border-color:#94a3b8;}
+.fw{width:90px;flex-shrink:0;display:flex;flex-direction:column;gap:5px;}
+.fwc{background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:5px;padding:5px 7px;font-size:10px;}
+.fwt{font-weight:800;font-size:9px;text-transform:uppercase;color:#475569;margin-bottom:2px;}
+
+/* ── SLIDES 3-7: Per-Context ── */
+.ctx-hdr{border-radius:6px 6px 0 0;padding:8px 13px;font-size:13px;font-weight:800;margin-bottom:14px;}
+.hdr-id{background:#eff6ff;color:#1e3a8a;border-bottom:2px solid #93c5fd;}
+.hdr-org{background:#f0fdf4;color:#14532d;border-bottom:2px solid #86efac;}
+.hdr-doc{background:#fff7ed;color:#7c2d12;border-bottom:2px solid #fdba74;}
+.hdr-know{background:#fefce8;color:#713f12;border-bottom:2px solid #fde047;}
+.hdr-chat{background:#faf5ff;color:#581c87;border-bottom:2px solid #e9d5ff;}
+.ctx-layout{display:grid;grid-template-columns:1fr 28px 248px;gap:0;align-items:start;}
+.ctx-agg{display:flex;flex-direction:column;align-items:center;}
+.ctx-conn{display:flex;flex-direction:column;align-items:center;padding-top:28px;gap:3px;}
+.ctx-conn-arr{font-size:13px;color:#94a3b8;line-height:1;}
+.ctx-conn-lbl{font-size:7.5px;color:#94a3b8;writing-mode:vertical-rl;
+  transform:rotate(180deg);letter-spacing:.03em;}
+.ctx-right{display:flex;flex-direction:column;gap:10px;}
+.ctx-panel{border-radius:7px;padding:9px 12px;}
+.ctx-svc{background:#f1f5f9;border:1.5px solid #cbd5e1;}
+.ctx-br{background:#fefce8;border:1.5px solid #fde047;}
+.ctx-tools{background:#fdf4ff;border:1.5px solid #e9d5ff;}
+.panel-hdr{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#475569;margin-bottom:6px;}
+.svc-manages{font-size:8.5px;font-weight:600;color:#334155;
+  background:#e2e8f0;border:1px solid #cbd5e1;border-radius:4px;
+  padding:2px 8px;margin-bottom:7px;display:flex;align-items:center;gap:4px;}
+.svc-item{font-size:10px;line-height:1.6;color:var(--ink);}
+.svc-name{font-weight:700;}
+.br-item{font-size:10px;line-height:1.6;color:var(--ink);padding-left:13px;position:relative;margin-bottom:1px;}
+.br-item::before{content:'';position:absolute;left:0;top:6px;width:6px;height:6px;
+  border-radius:50%;background:#ca8a04;}
+.self-ref{font-size:9px;color:var(--muted);border:1px dashed #94a3b8;
+  border-radius:4px;padding:2px 7px;margin-top:6px;}
+.section-div{width:100%;border-top:1px dashed #cbd5e1;margin:14px 0 8px;}
+.section-label{font-size:9px;color:#94a3b8;font-style:italic;margin-bottom:8px;align-self:flex-start;}
+
+/* nodes */
+.node{border-radius:5px;border:1.5px solid rgba(0,0,0,.12);background:#fff;
+  text-align:center;padding:3px 6px;min-width:70px;}
+.ns{font-size:7.5px;color:var(--muted);font-style:italic;line-height:1;}
+.nn{font-size:10.5px;font-weight:900;line-height:1.2;margin:1px 0;}
+.nb{font-size:8.5px;color:var(--muted);}
+.nf{font-size:8.5px;text-align:left;margin-top:2px;padding-top:2px;
+  border-top:1px solid var(--line);color:var(--ink);line-height:1.5;}
+.pk{color:#dc2626;font-weight:700;}
+.fk{color:#7c3aed;font-weight:700;}
+.nat{color:#059669;font-weight:700;}
+.n-ar{border:2.5px solid var(--ink);}
+.n-en{background:#f8fafc;}
+.n-vo{border-style:dashed;border-color:#7c3aed;background:#faf5ff;}
+.n-ev{border-style:dashed;border-color:#be185d;background:#fdf2f8;}
+.n-rm{border-style:dashed;border-color:#059669;background:#f0fdf4;}
+
+/* ─── CONNECTOR SYSTEM ───
+   All connectors are children of .ctx-agg (flex-col, align-items:center).
+   ctrunk-* : 2px wide vertical line, centered automatically.
+   crel     : stereotype label, centered.
+   carr2-*  : explicit ▼ arrowhead in correct color.
+   bch      : horizontal branch bar spanning full width.
+   bc       : per-child column inside bch.
+   bcdrop-* : per-child vertical drop line before arrowhead.
+*/
+
+/* Solid — composition (AR → Entity, persisted) */
+.ctrunk-s{width:2px;background:#334155;}
+/* Dashed violet — association (AR → VO, in-memory) */
+.ctrunk-dv{width:2px;background:repeating-linear-gradient(to bottom,
+  #7c3aed 0px,#7c3aed 4px,transparent 4px,transparent 8px);}
+/* Dashed pink — publishes (AR → Domain Event) */
+.ctrunk-ev{width:2px;background:repeating-linear-gradient(to bottom,
+  #be185d 0px,#be185d 4px,transparent 4px,transparent 8px);}
+
+/* Stereotype label */
+.crel{font-size:7.5px;font-style:italic;text-align:center;padding:1px 6px;
+  border-radius:2px;line-height:1.6;white-space:nowrap;}
+.crel-s{color:#334155;background:#e2e8f0;}
+.crel-dv{color:#7c3aed;background:#f5f3ff;}
+.crel-ev{color:#be185d;background:#fdf2f8;}
+
+/* Explicit arrowhead */
+.carr2{font-size:12px;line-height:1;text-align:center;}
+.carr2-s{color:#334155;}
+.carr2-dv{color:#7c3aed;}
+.carr2-ev{color:#be185d;}
+
+/* Horizontal branch bar (spans full ctx-agg width) */
+.bch{display:flex;gap:8px;width:100%;}
+.bch-s{border-top:2px solid #334155;}
+.bch-dv{border-top:2px dashed #7c3aed;}
+.bch-ev{border-top:2px dashed #be185d;}
+
+/* Per-child column */
+.bc{display:flex;flex-direction:column;align-items:center;flex:1;}
+/* Per-child drop line (gradient matches trunk style) */
+.bcdrop-s{width:2px;background:#334155;}
+.bcdrop-dv{width:2px;background:repeating-linear-gradient(to bottom,
+  #7c3aed 0px,#7c3aed 4px,transparent 4px,transparent 8px);}
+.bcdrop-ev{width:2px;background:repeating-linear-gradient(to bottom,
+  #be185d 0px,#be185d 4px,transparent 4px,transparent 8px);}
+
+/* ── Legend row (reused across slides) ── */
+.conn-legend{display:flex;gap:14px;margin-top:12px;padding-top:10px;
+  border-top:1px solid var(--line);flex-wrap:wrap;}
+.cl-item{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--muted);}
+.cl-line{height:2px;width:22px;}
+.cl-line-s{background:#334155;}
+.cl-line-dv{background:repeating-linear-gradient(to right,
+  #7c3aed 0px,#7c3aed 4px,transparent 4px,transparent 8px);}
+.cl-line-ev{background:repeating-linear-gradient(to right,
+  #be185d 0px,#be185d 4px,transparent 4px,transparent 8px);}
+
+/* ── SLIDE 8: table ── */
+table{width:100%;border-collapse:collapse;font-size:11px;}
+th{background:var(--ink);color:#fff;padding:6px 10px;font-size:10px;
+  text-transform:uppercase;letter-spacing:.05em;text-align:left;}
+td{padding:5px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+tr:nth-child(even) td{background:#f8fafc;}
+.tag{display:inline-block;padding:1px 7px;border-radius:999px;font-size:9.5px;font-weight:700;}
+.tj{background:#dbeafe;color:#1e40af;}
+.tn{background:#dcfce7;color:#166534;}
+.tk{background:#ede9fe;color:#5b21b6;}
+.ts{background:#fef3c7;color:#92400e;}
+</style>
+</head>
+<body>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 1 · 14.1 Bounded Context Map
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="sh">14.1 Bounded Context Map</div>
+<div class="ss">RoboKnow · 5 Bounded Contexts · Monolith (single JAR on AWS EC2) · All contexts share one MySQL schema</div>
+
+<div class="cmap">
+  <div class="cbox cbox-id">
+    <div class="cbox-t">🔐 IDENTITY CONTEXT</div>
+    <div class="cbox-s">User · Role · JWT · PermissionService</div>
+  </div>
+  <div class="carr-h">◄────►<span class="cl">Partnership</span></div>
+  <div class="cbox cbox-org">
+    <div class="cbox-t">🏢 ORGANISATION CONTEXT</div>
+    <div class="cbox-s">OrgTag · Hierarchy · ACL Filter</div>
+  </div>
+
+  <div class="carr-v">▼<span class="cl">U / S</span></div>
+  <div></div>
+  <div class="carr-v">▼<span class="cl">U / S</span></div>
+
+  <div class="cbox cbox-doc">
+    <div class="cbox-t">📄 DOCUMENT CONTEXT</div>
+    <div class="cbox-s">FileUpload · ChunkInfo · Kafka Events</div>
+  </div>
+  <div class="carr-h">────►<span class="cl">AC / CF</span></div>
+  <div class="cbox cbox-know">
+    <div class="cbox-t">🔍 KNOWLEDGE CONTEXT</div>
+    <div class="cbox-s">EsDocument · Vector · HybridSearch</div>
+  </div>
+
+  <div></div>
+  <div></div>
+  <div class="carr-v">▼<span class="cl">U / S</span></div>
+
+  <div></div>
+  <div></div>
+  <div class="cbox cbox-chat">
+    <div class="cbox-t">🧠 CHAT / AGENT CONTEXT</div>
+    <div class="cbox-s">Conversation · ReAct · STM / LTM</div>
+  </div>
+</div>
+
+<div class="clegend">
+  <div class="cleg">◄────►&nbsp;<b>Partnership</b>: Identity ↔ Organisation coordinate; both teams align on shared User/OrgTag model</div>
+  <div class="cleg">────►&nbsp;<b>U/S (Upstream/Downstream)</b>: upstream supplies model; downstream consumes — upstream ignores downstream</div>
+  <div class="cleg">────►&nbsp;<b>AC/CF</b>: Document publishes Kafka event (Anti-Corruption Layer); Knowledge consumes as Conformist — no direct model coupling</div>
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 2 · DDD Four-Layer Architecture
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="sh">DDD Four-Layer Architecture</div>
+<div class="ss">Monolith · Spring Boot 3 · Single JAR on AWS EC2 · All layers call downward only</div>
+<div class="arch">
+
+  <div class="layers">
+    <div class="layer l-api">
+      <div class="ltag">API<br>Layer</div>
+      <div class="lbody">
+        <div class="cb">
+          <div class="cb-t">Facade</div>
+          <div class="cb-i">AuthController · ChatController<br>DocumentController · UploadController<br>SearchController · ConversationController<br>UserController · AdminController</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Assembler</div>
+          <div class="cb-i">Domain → DTO<br>DTO → Command</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Contract</div>
+          <div class="cb-i">JWT Bearer Token<br>WebSocket /chat<br>REST schemas</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="larr"><span>calls AppService methods</span></div>
+
+    <div class="layer l-app">
+      <div class="ltag">App<br>Layer</div>
+      <div class="lbody">
+        <div class="cb">
+          <div class="cb-t">Command</div>
+          <div class="cb-i">RegisterUserCmd<br>UploadFileCmd<br>DeleteDocCmd</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Query</div>
+          <div class="cb-i">SearchRequest<br>ConversationQuery<br>DocumentListQuery</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">DTO</div>
+          <div class="cb-i">Message · TextChunk<br>SearchResult · AgentStep</div>
+        </div>
+        <div class="cb cb-ev">
+          <div class="cb-t">Event (Kafka)</div>
+          <div class="cb-i">FileProcessingTask<br>→ file-processing-topic1<br>→ file-processing-dlt</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">AppService</div>
+          <div class="cb-i">UserService · UploadService<br>DocumentService<br>ConversationService<br>ChatHandler · ReactAgentService<br>AgentStopService</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="larr"><span>orchestrates aggregates &amp; domain services</span></div>
+
+    <div class="layer l-dom">
+      <div class="ltag">Domain<br>Layer</div>
+      <div class="lbody">
+        <div class="cb cb-ar">
+          <div class="cb-t">Aggregate Root</div>
+          <div class="cb-i">User · FileUpload<br>OrganizationTag · Conversation<br>EsDocument</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Entity / PO</div>
+          <div class="cb-i">ChunkInfo<br>DocumentVector</div>
+        </div>
+        <div class="cb cb-vo">
+          <div class="cb-t">Value Object</div>
+          <div class="cb-i">Role · JwtToken · OrgTagSet<br>TextChunk · Message<br>ConversationWindow<br>AgentContext · AgentState<br>AgentStep · AgentEvent<br>SearchRequest · SearchResult</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Repository (Interface)</div>
+          <div class="cb-i">UserRepo · FileUploadRepo<br>ChunkInfoRepo · ConversationRepo<br>DocumentVectorRepo · OrgTagRepo</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Domain Service</div>
+          <div class="cb-i">ElasticsearchService<br>HybridSearchService<br>VectorizationService<br>ParseService · PermissionService<br>TokenCacheService · OrgTagCacheService</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Factory / Init</div>
+          <div class="cb-i">AdminUserInitializer<br>OrgTagInitializer<br>EsIndexInitializer<br>ToolRegistry</div>
+        </div>
+        <div class="cb cb-ex">
+          <div class="cb-t">Port (Interface)</div>
+          <div class="cb-i">EmbeddingClient<br>OpenAiClient</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="larr"><span>implements repositories · persists entities · calls external APIs</span></div>
+
+    <div class="layer l-inf">
+      <div class="ltag">Infra<br>Layer</div>
+      <div class="lbody">
+        <div class="cb">
+          <div class="cb-t">Repository (Impl)</div>
+          <div class="cb-i">Spring Data JPA<br>auto-generated impls</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">DAO</div>
+          <div class="cb-i">RedisRepository<br>ElasticsearchClient<br>MinioClient</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Entity (@Entity / PO)</div>
+          <div class="cb-i">users · file_upload<br>chunk_info · conversations<br>organization_tags<br>document_vectors</div>
+        </div>
+        <div class="cb">
+          <div class="cb-t">Config</div>
+          <div class="cb-i">SecurityConfig · KafkaConfig<br>MinioConfig · RedisConfig<br>EsConfig · WebSocketConfig<br>AiProperties</div>
+        </div>
+        <div class="cb cb-ex">
+          <div class="cb-t">Adapter (Impl)</div>
+          <div class="cb-i">EmbeddingClient → OpenAI<br>OpenAiClient → OpenAI<br>JwtAuthFilter<br>OrgTagAuthFilter<br>LoggingInterceptor</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fw">
+    <div class="fwc"><div class="fwt">Framework</div>Spring Boot 3<br>Spring MVC<br>WebFlux</div>
+    <div class="fwc"><div class="fwt">ORM</div>Hibernate JPA<br>MySQL 8.0</div>
+    <div class="fwc"><div class="fwt">Cache</div>Redis 7.0<br>Lettuce</div>
+    <div class="fwc"><div class="fwt">AOP/Sec</div>Spring Security<br>JWT (JJWT)</div>
+    <div class="fwc"><div class="fwt">MQ</div>Kafka 3.2<br>KRaft mode</div>
+    <div class="fwc"><div class="fwt">Search/AI</div>ES 8.10+IK<br>OpenAI API<br>Tika</div>
+    <div class="fwc"><div class="fwt">Storage</div>MinIO<br>S3 API</div>
+    <div class="fwc"><div class="fwt">Utils</div>Lombok<br>JwtUtils<br>LogUtils</div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 3 · 14.2 Identity & Access
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="ctx-hdr hdr-id">🔐 14.2 Identity &amp; Access Bounded Context</div>
+<div class="ctx-layout">
+
+  <div class="ctx-agg">
+    <div class="node n-ar" style="width:100%;">
+      <div class="ns">«Aggregate Root · PO»</div>
+      <div class="nn">User</div>
+      <div class="nb">table: users</div>
+      <div class="nf">
+        <div><span class="pk">PK</span> id: Long</div>
+        <div>username: String UNIQUE NOT NULL</div>
+        <div>password: String (BCrypt hash, never exposed)</div>
+        <div><span class="fk">VO</span> role: Role (enum)</div>
+        <div>orgTags: String (csv of OrgTag.tagId)</div>
+        <div>primaryOrg: String [must be ⊆ orgTags]</div>
+        <div>createdAt / updatedAt: LocalDateTime</div>
+      </div>
+    </div>
+
+    <!-- AR → VOs : dashed violet «association» ──────────── -->
+    <div class="ctrunk-dv" style="height:14px;"></div>
+    <div class="crel crel-dv">«association»</div>
+    <div class="bch bch-dv">
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO · Enum»</div>
+          <div class="nn">Role</div>
+          <div class="nf">USER | ADMIN</div>
+        </div>
+      </div>
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO · Redis blacklist»</div>
+          <div class="nn">JwtToken</div>
+          <div class="nf">
+            <div>rawToken: String</div>
+            <div>expiresAt: Instant</div>
+          </div>
+        </div>
+      </div>
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO · Redis cache»</div>
+          <div class="nn">OrgTagSet</div>
+          <div class="nf">tags: Set&lt;String&gt;</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-legend">
+      <div class="cl-item"><div class="cl-line cl-line-dv"></div>▼ dashed violet = «association» (VO, in-memory, no identity)</div>
+    </div>
+  </div>
+
+  <div class="ctx-conn">
+    <div class="ctx-conn-arr">←</div>
+    <div class="ctx-conn-lbl">uses</div>
+  </div>
+
+  <div class="ctx-right">
+    <div class="ctx-panel ctx-svc">
+      <div class="svc-manages">← manages: <b>User</b> AR</div>
+      <div class="panel-hdr">Domain Services</div>
+      <div class="svc-item"><span class="svc-name">UserService</span> — CRUD, BCrypt password ops</div>
+      <div class="svc-item"><span class="svc-name">TokenCacheService</span> — JWT blacklist in Redis</div>
+      <div class="svc-item"><span class="svc-name">PermissionService</span> — data-level access (org tag check)</div>
+      <div class="svc-item"><span class="svc-name">CustomUserDetailsService</span> — Spring Security integration</div>
+    </div>
+    <div class="ctx-panel ctx-br">
+      <div class="panel-hdr">Business Rules</div>
+      <div class="br-item">BR-1: Username must be globally unique</div>
+      <div class="br-item">BR-2: Password stored as BCrypt hash, never plaintext</div>
+      <div class="br-item">BR-3: New users default to USER role</div>
+      <div class="br-item">BR-4: primaryOrg auto-set to PRIVATE_&lt;username&gt; on registration</div>
+      <div class="br-item">BR-5: ADMIN role assignment requires existing ADMIN caller</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 4 · 14.6 Organisation
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="ctx-hdr hdr-org">🏢 14.6 Organisation Bounded Context</div>
+<div class="ctx-layout">
+
+  <div class="ctx-agg">
+    <div class="node n-ar" style="width:100%;">
+      <div class="ns">«Aggregate Root · PO»</div>
+      <div class="nn">OrganizationTag</div>
+      <div class="nb">table: organization_tags</div>
+      <div class="nf">
+        <div><span class="pk">PK</span> tagId: String (human slug, immutable after creation)</div>
+        <div>name: String (display name)</div>
+        <div>description: String (TEXT)</div>
+        <div>parentTag: String → tagId (self-ref; null = root)</div>
+        <div><span class="fk">FK</span> createdBy → User (ManyToOne)</div>
+        <div>createdAt / updatedAt: LocalDateTime</div>
+      </div>
+    </div>
+
+    <div class="ctrunk-s" style="height:10px;"></div>
+    <div class="self-ref">↩ parentTag (tree hierarchy; circular refs prohibited)</div>
+
+    <div style="margin-top:12px;width:100%;font-size:9.5px;color:var(--muted);text-align:left;
+      background:#f0fdf4;border:1px solid #86efac;border-radius:5px;padding:8px 11px;">
+      <b style="color:#14532d;">Multi-tenancy isolation rule:</b><br>
+      FileUpload.orgTag → OrgTag.tagId<br>
+      EsDocument.orgTag → OrgTag.tagId<br>
+      ACL check: orgTag ∈ user.orgTags OR isPublic = true<br>
+      Parent tag grants access to all child org documents
+    </div>
+  </div>
+
+  <div class="ctx-conn">
+    <div class="ctx-conn-arr">←</div>
+    <div class="ctx-conn-lbl">uses</div>
+  </div>
+
+  <div class="ctx-right">
+    <div class="ctx-panel ctx-svc">
+      <div class="svc-manages">← manages: <b>OrganizationTag</b> AR</div>
+      <div class="panel-hdr">Domain Services</div>
+      <div class="svc-item"><span class="svc-name">OrgTagCacheService</span> — caches tag hierarchy in Redis</div>
+      <div class="svc-item"><span class="svc-name">OrgTagInitializer</span> — seeds default tags on startup</div>
+      <div class="svc-item"><span class="svc-name">OrgTagAuthorizationFilter</span> — HTTP filter for data-level auth</div>
+    </div>
+    <div class="ctx-panel ctx-br">
+      <div class="panel-hdr">Business Rules</div>
+      <div class="br-item">BR-1: tagId immutable after creation</div>
+      <div class="br-item">BR-2: Root tags (parentTag == null) = top-level departments</div>
+      <div class="br-item">BR-3: Circular parent references prohibited</div>
+      <div class="br-item">BR-4: Deleting tag with children requires reassignment first</div>
+      <div class="br-item">BR-5: PRIVATE_&lt;username&gt; auto-created on registration; not deletable</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 5 · 14.3 Document
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="ctx-hdr hdr-doc">📄 14.3 Document Bounded Context</div>
+<div class="ctx-layout">
+
+  <div class="ctx-agg">
+    <div class="node n-ar" style="width:100%;">
+      <div class="ns">«Aggregate Root · PO»</div>
+      <div class="nn">FileUpload</div>
+      <div class="nb">table: file_upload</div>
+      <div class="nf">
+        <div><span class="pk">PK</span> id: Long</div>
+        <div><span class="nat">NAT</span> fileMd5: String(32) — business key, MD5 of file binary</div>
+        <div>fileName: String · totalSize: long (bytes)</div>
+        <div>status: int (0 = uploading, 1 = complete)</div>
+        <div><span class="fk">FK</span> userId: String → User.id (denormalised)</div>
+        <div><span class="fk">FK</span> orgTag: String → OrgTag.tagId</div>
+        <div>isPublic: boolean · createdAt · mergedAt: LocalDateTime</div>
+      </div>
+    </div>
+
+    <!-- AR → ChunkInfo Entity : solid «composition» ──────── -->
+    <div class="ctrunk-s" style="height:14px;"></div>
+    <div class="crel crel-s">«composition»</div>
+    <div class="ctrunk-s" style="height:8px;"></div>
+    <div class="carr2 carr2-s">▼</div>
+    <div class="node n-en">
+      <div class="ns">«Entity · PO»</div>
+      <div class="nn">ChunkInfo</div>
+      <div class="nb">table: chunk_info</div>
+      <div class="nf">
+        <div><span class="pk">PK</span> id: Long</div>
+        <div><span class="nat">NAT</span> fileMd5 → FileUpload</div>
+        <div>chunkIndex: int (0-based)</div>
+        <div>chunkMd5: String (integrity)</div>
+        <div>storagePath: String (MinIO)</div>
+      </div>
+    </div>
+
+    <!-- AR → TextChunk VO : dashed violet «association» ───── -->
+    <div class="ctrunk-dv" style="height:14px;"></div>
+    <div class="crel crel-dv">«association»</div>
+    <div class="ctrunk-dv" style="height:8px;"></div>
+    <div class="carr2 carr2-dv">▼</div>
+    <div class="node n-vo">
+      <div class="ns">«VO · in-memory»</div>
+      <div class="nn">TextChunk</div>
+      <div class="nf">
+        <div>chunkId: int</div>
+        <div>content: String ≤ 512 chars</div>
+      </div>
+    </div>
+
+    <!-- AR → FileProcessingTask : dashed pink «publishes» ─── -->
+    <div class="ctrunk-ev" style="height:14px;"></div>
+    <div class="crel crel-ev">«publishes»</div>
+    <div class="ctrunk-ev" style="height:8px;"></div>
+    <div class="carr2 carr2-ev">▼</div>
+    <div class="node n-ev" style="width:100%;">
+      <div class="ns">«Domain Event · Kafka»</div>
+      <div class="nn">FileProcessingTask</div>
+      <div class="nb">topic: file-processing-topic1 · DLT: file-processing-dlt</div>
+      <div class="nf">fileMd5 · fileName · userId · orgTag · isPublic</div>
+    </div>
+
+    <div class="conn-legend">
+      <div class="cl-item"><div class="cl-line cl-line-s"></div>▼ solid = «composition» (Entity, JPA persisted)</div>
+      <div class="cl-item"><div class="cl-line cl-line-dv"></div>▼ dashed violet = «association» (VO, in-memory)</div>
+      <div class="cl-item"><div class="cl-line cl-line-ev"></div>▼ dashed pink = «publishes» (Domain Event, Kafka)</div>
+    </div>
+  </div>
+
+  <div class="ctx-conn">
+    <div class="ctx-conn-arr">←</div>
+    <div class="ctx-conn-lbl">uses</div>
+  </div>
+
+  <div class="ctx-right">
+    <div class="ctx-panel ctx-svc">
+      <div class="svc-manages">← manages: <b>FileUpload</b> AR + <b>ChunkInfo</b></div>
+      <div class="panel-hdr">Domain Services</div>
+      <div class="svc-item"><span class="svc-name">UploadService</span> — chunk tracking, merge trigger</div>
+      <div class="svc-item"><span class="svc-name">ParseService</span> — Tika text extraction, chunking (≤512 chars)</div>
+      <div class="svc-item"><span class="svc-name">FileTypeValidationService</span> — extension + MIME whitelist</div>
+      <div class="svc-item"><span class="svc-name">DocumentService</span> — document lifecycle management</div>
+    </div>
+    <div class="ctx-panel ctx-br">
+      <div class="panel-hdr">Business Rules</div>
+      <div class="br-item">BR-1: fileMd5 = dedup key; same MD5 = same binary</div>
+      <div class="br-item">BR-2: All chunks must arrive before merge is triggered</div>
+      <div class="br-item">BR-3: Redis bitmap tracks chunk completion (single GET check)</div>
+      <div class="br-item">BR-4: Supported: {pdf, docx, txt}; others rejected at intake</div>
+      <div class="br-item">BR-5: Max 50 MB / file · 100 MB / request</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 6 · 14.4 Knowledge
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="ctx-hdr hdr-know">🔍 14.4 Knowledge Bounded Context</div>
+<div class="ctx-layout">
+
+  <div class="ctx-agg">
+    <div class="node n-ar" style="width:100%;">
+      <div class="ns">«Aggregate Root · ES Document (not JPA)»</div>
+      <div class="nn">EsDocument</div>
+      <div class="nb">index: documents (Elasticsearch 8.10)</div>
+      <div class="nf">
+        <div><span class="pk">PK</span> id: String (ES _id)</div>
+        <div>content: String (~512 chars extracted text)</div>
+        <div>embedding: float[2048] (dense_vector, cosine similarity)</div>
+        <div>fileMd5 · fileName · orgTag · isPublic · userId (ACL fields)</div>
+      </div>
+    </div>
+
+    <!-- AR → DocumentVector Entity : solid «composition» ─── -->
+    <div class="ctrunk-s" style="height:14px;"></div>
+    <div class="crel crel-s">«composition»</div>
+    <div class="ctrunk-s" style="height:8px;"></div>
+    <div class="carr2 carr2-s">▼</div>
+    <div class="node n-en">
+      <div class="ns">«Entity · JPA mirror»</div>
+      <div class="nn">DocumentVector</div>
+      <div class="nb">table: document_vectors</div>
+      <div class="nf">
+        <div><span class="pk">PK</span> id: Long</div>
+        <div>fileMd5: String</div>
+        <div>vectorId: String (ES _id)</div>
+      </div>
+    </div>
+
+    <!-- AR → SearchRequest VO + SearchResult RM : dashed violet «association» -->
+    <div class="ctrunk-dv" style="height:14px;"></div>
+    <div class="crel crel-dv">«association»</div>
+    <div class="bch bch-dv">
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO · Input»</div>
+          <div class="nn">SearchRequest</div>
+          <div class="nf">
+            <div>query: String</div>
+            <div>topK: int (default 5)</div>
+          </div>
+        </div>
+      </div>
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-rm">
+          <div class="ns">«Read Model · assembled»</div>
+          <div class="nn">SearchResult</div>
+          <div class="nf">
+            <div>textContent · score</div>
+            <div>fileName (enriched)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-legend">
+      <div class="cl-item"><div class="cl-line cl-line-s"></div>▼ solid = «composition» (Entity, JPA persisted)</div>
+      <div class="cl-item"><div class="cl-line cl-line-dv"></div>▼ dashed violet = «association» (VO / Read Model)</div>
+    </div>
+  </div>
+
+  <div class="ctx-conn">
+    <div class="ctx-conn-arr">←</div>
+    <div class="ctx-conn-lbl">uses</div>
+  </div>
+
+  <div class="ctx-right">
+    <div class="ctx-panel ctx-svc">
+      <div class="svc-manages">← manages: <b>EsDocument</b> AR + <b>DocumentVector</b></div>
+      <div class="panel-hdr">Domain Services</div>
+      <div class="svc-item"><span class="svc-name">ElasticsearchService</span> — index management, CRUD</div>
+      <div class="svc-item"><span class="svc-name">VectorizationService</span> — chunk → embedding → ES index</div>
+      <div class="svc-item"><span class="svc-name">HybridSearchService</span> — BM25 + kNN with permission filter</div>
+      <div class="svc-item"><span class="svc-name">EmbeddingClient</span> — OpenAI text-embedding-3-large wrapper</div>
+    </div>
+    <div class="ctx-panel ctx-br">
+      <div class="panel-hdr">Business Rules</div>
+      <div class="br-item">BR-1: Each chunk → exactly one embedding (1:1)</div>
+      <div class="br-item">BR-2: Embedding dim fixed at 2048 (MRL ↓ from 3072)</div>
+      <div class="br-item">BR-3: Permission filter applied before any result returned</div>
+      <div class="br-item">BR-4: Parent org tag grants access to child org documents</div>
+      <div class="br-item">BR-5: topK defaults to 5; configurable per request</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 7 · 14.5 Chat / Agent
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="ctx-hdr hdr-chat">🧠 14.5 Chat / Agent Bounded Context</div>
+<div class="ctx-layout">
+
+  <div class="ctx-agg">
+
+    <!-- Persisted AR -->
+    <div class="node n-ar" style="width:100%;">
+      <div class="ns">«Aggregate Root · PO»</div>
+      <div class="nn">Conversation</div>
+      <div class="nb">table: conversations</div>
+      <div class="nf">
+        <div><span class="pk">PK</span> id: Long</div>
+        <div><span class="fk">FK</span> user → User (ManyToOne LAZY)</div>
+        <div>question: TEXT · answer: TEXT</div>
+        <div>summary: TEXT (LTM — one sentence, LLM-generated)</div>
+        <div>timestamp: LocalDateTime (indexed)</div>
+      </div>
+    </div>
+
+    <!-- AR → Message VO + ConversationWindow VO : dashed violet «association» -->
+    <div class="ctrunk-dv" style="height:14px;"></div>
+    <div class="crel crel-dv">«association»</div>
+    <div class="bch bch-dv">
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO»</div>
+          <div class="nn">Message</div>
+          <div class="nf">role: String<br>content: String</div>
+        </div>
+      </div>
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO · STM + LTM window»</div>
+          <div class="nn">ConversationWindow</div>
+          <div class="nf">
+            <div>stmTurns: List&lt;Conv&gt;</div>
+            <div>ltmSummaries: List&lt;String&gt;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transient section divider -->
+    <div class="section-div"></div>
+    <div class="section-label">Transient · session-scoped · no persistence</div>
+
+    <!-- AgentContext: execution context VO (purple) -->
+    <div class="node n-vo" style="width:100%;border-color:#701a75;background:#fdf4ff;">
+      <div class="ns">«VO · Execution Context»</div>
+      <div class="nn">AgentContext</div>
+      <div class="nb">per-request · WebSocket session</div>
+      <div class="nf">
+        <div>userId · userMessage · conversationId</div>
+        <div>history: List&lt;Map&gt; · session: WebSocketSession</div>
+      </div>
+    </div>
+
+    <!-- AgentContext → AgentState + AgentStep + AgentEvent : dashed violet «association» -->
+    <div class="ctrunk-dv" style="height:14px;"></div>
+    <div class="crel crel-dv">«association»</div>
+    <div class="bch bch-dv">
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO · Enum»</div>
+          <div class="nn">AgentState</div>
+          <div class="nf">THINKING<br>ACTING<br>OBSERVING<br>ANSWERING<br>FINISHED</div>
+        </div>
+      </div>
+      <div class="bc">
+        <div class="bcdrop-dv" style="height:10px;"></div>
+        <div class="carr2 carr2-dv">▼</div>
+        <div class="node n-vo">
+          <div class="ns">«VO · ReAct step»</div>
+          <div class="nn">AgentStep</div>
+          <div class="nf">
+            <div>iteration: int</div>
+            <div>thought · action · actionInput</div>
+            <div>isFinalAnswer: boolean</div>
+            <div>finalAnswer: String</div>
+          </div>
+        </div>
+      </div>
+      <div class="bc">
+        <div class="bcdrop-ev" style="height:10px;"></div>
+        <div class="carr2 carr2-ev">▼</div>
+        <div class="node n-ev">
+          <div class="ns">«VO · WebSocket push»</div>
+          <div class="nn">AgentEvent</div>
+          <div class="nf">
+            <div>type: THINKING | ACTING</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp; | OBSERVING | ANSWERING</div>
+            <div>payload: String</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conn-legend">
+      <div class="cl-item"><div class="cl-line cl-line-dv"></div>▼ dashed violet = «association» (VO, in-memory)</div>
+      <div class="cl-item"><div class="cl-line cl-line-ev"></div>▼ dashed pink = WebSocket push event</div>
+    </div>
+  </div>
+
+  <div class="ctx-conn">
+    <div class="ctx-conn-arr">←</div>
+    <div class="ctx-conn-lbl">uses</div>
+  </div>
+
+  <div class="ctx-right">
+    <div class="ctx-panel ctx-svc">
+      <div class="svc-manages">← manages: <b>Conversation</b> AR + <b>AgentContext</b></div>
+      <div class="panel-hdr">Domain Services</div>
+      <div class="svc-item"><span class="svc-name">ChatHandler</span> — async dispatch, stop handling</div>
+      <div class="svc-item"><span class="svc-name">ReactAgentService</span> — ReAct loop, memory management</div>
+      <div class="svc-item"><span class="svc-name">ToolRegistry</span> — tool registration and dispatch</div>
+      <div class="svc-item"><span class="svc-name">AgentStopService</span> — stop flag per WebSocket session</div>
+      <div class="svc-item"><span class="svc-name">ConversationService</span> — persist conversations, query LTM</div>
+    </div>
+    <div class="ctx-panel ctx-tools">
+      <div class="panel-hdr">Tools (ToolRegistry)</div>
+      <div class="svc-item"><span class="svc-name">HybridSearchTool</span> — calls HybridSearchService</div>
+      <div class="svc-item"><span class="svc-name">MetadataFilterTool</span> — filter by filename, date, orgTag</div>
+      <div class="svc-item"><span class="svc-name">SummarizationTool</span> — summarise retrieved content chunks</div>
+    </div>
+    <div class="ctx-panel ctx-br">
+      <div class="panel-hdr">Business Rules</div>
+      <div class="br-item">BR-1: MAX_ITERATIONS = 5 (hard cap on ReAct loop)</div>
+      <div class="br-item">BR-2: STM_THRESHOLD = 20 messages → rolling compression</div>
+      <div class="br-item">BR-3: CONTEXT_WINDOW = 10 messages sent to LLM per turn</div>
+      <div class="br-item">BR-4: LTM_LIMIT = 3 past summaries injected per turn</div>
+      <div class="br-item">BR-5: LTM write skipped if answer = "no result" signal</div>
+      <div class="br-item">BR-6: Stop flag checked at start of each ReAct iteration</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 8 · Cross-Domain Relationships
+═══════════════════════════════════════════ -->
+<div class="slide">
+<div class="sh">Cross-Domain Relationships</div>
+<div class="ss">All 5 contexts share one MySQL schema (monolith). Kafka is the only async boundary.</div>
+
+<table>
+<thead>
+<tr><th>From</th><th>To</th><th>Field</th><th>Card.</th><th>Type</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><b>Organisation</b> · OrgTag</td>
+  <td><b>Identity</b> · User</td>
+  <td><code>createdBy → User</code></td>
+  <td>N:1</td>
+  <td><span class="tag tj">JPA @ManyToOne</span></td>
+  <td>Each org tag has one creator. Hard FK enforced by JPA.</td>
+</tr>
+<tr>
+  <td><b>Document</b> · FileUpload</td>
+  <td><b>Identity</b> · User</td>
+  <td><code>userId → User.id</code></td>
+  <td>N:1</td>
+  <td><span class="tag tn">Logical String FK</span></td>
+  <td>No JPA annotation. App layer resolves userId string.</td>
+</tr>
+<tr>
+  <td><b>Document</b> · FileUpload</td>
+  <td><b>Organisation</b> · OrgTag</td>
+  <td><code>orgTag → tagId</code></td>
+  <td>N:1</td>
+  <td><span class="tag tn">Logical String FK</span></td>
+  <td>Scopes file to one org. Propagated to ES for ACL filter.</td>
+</tr>
+<tr>
+  <td><b>Document</b> · FileProcessingTask</td>
+  <td><b>Knowledge</b> · EsDocument</td>
+  <td><code>fileMd5</code> correlation key</td>
+  <td>1:N</td>
+  <td><span class="tag tk">Kafka async event</span></td>
+  <td>Upload → publish → Consumer: parse → embed → index N EsDocuments (one per chunk).</td>
+</tr>
+<tr>
+  <td><b>Knowledge</b> · EsDocument</td>
+  <td><b>Document</b> · FileUpload</td>
+  <td><code>fileMd5 → FileUpload</code></td>
+  <td>N:1</td>
+  <td><span class="tag tn">Natural key join</span></td>
+  <td>SearchResult enriched with fileName via MySQL JOIN on fileMd5 after ES hit.</td>
+</tr>
+<tr>
+  <td><b>Knowledge</b> · EsDocument</td>
+  <td><b>Knowledge</b> · DocumentVector</td>
+  <td><code>vectorId = ES _id</code></td>
+  <td>1:1</td>
+  <td><span class="tag tn">Natural key</span></td>
+  <td>DocumentVector (JPA) mirrors EsDocument reference; used to delete ES doc on file removal.</td>
+</tr>
+<tr>
+  <td><b>Conversation</b> · Conversation</td>
+  <td><b>Identity</b> · User</td>
+  <td><code>user → User</code></td>
+  <td>N:1</td>
+  <td><span class="tag tj">JPA @ManyToOne LAZY</span></td>
+  <td>Index on (user_id, timestamp) for history queries.</td>
+</tr>
+<tr>
+  <td><b>Chat/Agent</b> · ChatHandler</td>
+  <td><b>Knowledge</b> · HybridSearchService</td>
+  <td>SearchRequest VO → SearchResult VO</td>
+  <td>1:N / query</td>
+  <td><span class="tag ts">Sync call</span></td>
+  <td>RAG: question → embed → kNN + BM25 → inject as LLM context.</td>
+</tr>
+<tr>
+  <td><b>Chat/Agent</b> · AgentContext</td>
+  <td><b>Conversation</b> · ConversationService</td>
+  <td><code>conversationId</code></td>
+  <td>1:1 / session</td>
+  <td><span class="tag ts">Sync call</span></td>
+  <td>Agent reads history for ReAct context. Writes back on FINISHED state.</td>
+</tr>
+<tr>
+  <td><b>Chat/Agent</b> · HybridSearchTool</td>
+  <td><b>Knowledge</b> · HybridSearchService</td>
+  <td>ToolRegistry.dispatch()</td>
+  <td>1:N / step</td>
+  <td><span class="tag ts">Sync call</span></td>
+  <td>ACTING state → ES query → Observation returned to ReAct loop.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+</body>
+</html>

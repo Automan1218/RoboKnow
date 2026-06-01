@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>RoboKnow – Logical Architecture</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#e8edf3;font-family:'Segoe UI',Inter,system-ui,sans-serif;padding:16px;}
+
+.diagram{background:#fff;border:2px solid #cbd5e1;border-radius:12px;
+  max-width:940px;margin:0 auto;overflow:hidden;
+  box-shadow:0 6px 24px rgba(0,0,0,.10);}
+
+/* ── Title bar ── */
+.d-title{background:#0f172a;color:#fff;padding:14px 24px;}
+.d-title h1{font-size:17px;font-weight:800;letter-spacing:.3px;}
+.d-title p{font-size:10.5px;color:#94a3b8;margin-top:3px;}
+
+/* ── Layer row ── */
+.layer{display:flex;align-items:stretch;border-bottom:1.5px solid #e2e8f0;}
+.layer:last-child{border-bottom:none;}
+
+.lbl{width:88px;flex-shrink:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:10px 5px;border-right:3px solid;font-weight:800;line-height:1.5;}
+.lbl-en{font-size:10.5px;}
+
+.lcontent{flex:1;display:flex;flex-wrap:wrap;gap:9px;padding:12px 16px;align-items:flex-start;}
+
+/* ── Layer color themes ── */
+.l-client  .lbl{background:#eff6ff;border-color:#3b82f6;color:#1d4ed8;}
+.l-client  .lcontent{background:#f8fbff;}
+.l-gw      .lbl{background:#fefce8;border-color:#eab308;color:#854d0e;}
+.l-gw      .lcontent{background:#fffef8;}
+.l-app     .lbl{background:#fff7ed;border-color:#f97316;color:#9a3412;}
+.l-app     .lcontent{background:#fffbf5;}
+.l-core    .lbl{background:#f5f3ff;border-color:#7c3aed;color:#4c1d95;}
+.l-core    .lcontent{background:#faf9ff;}
+.l-ai      .lbl{background:#fdf4ff;border-color:#c026d3;color:#701a75;}
+.l-ai      .lcontent{background:#fef8ff;}
+.l-store   .lbl{background:#f0fdf4;border-color:#16a34a;color:#14532d;}
+.l-store   .lcontent{background:#f7fef9;}
+.l-devops  .lbl{background:#f8fafc;border-color:#475569;color:#1e293b;}
+.l-devops  .lcontent{background:#f8fafc;}
+
+/* ── Component box ── */
+.box{background:#fff;border:1.5px solid #e2e8f0;border-radius:7px;
+  padding:8px 12px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.box-t{font-size:9.5px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.05em;color:#64748b;margin-bottom:5px;}
+.box-b{font-size:10.5px;color:#1e293b;line-height:1.5;}
+
+/* ── Group (dashed sub-section) ── */
+.grp{border:1.5px dashed #cbd5e1;border-radius:8px;padding:8px 11px;}
+.grp-t{font-size:9px;font-weight:700;text-transform:uppercase;
+  color:#94a3b8;letter-spacing:.05em;margin-bottom:5px;}
+
+/* ── Chip / pill ── */
+.chip{display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;
+  border-radius:999px;padding:2px 9px;font-size:10px;color:#334155;margin:2px;}
+
+/* ── Service tag (colored chip) ── */
+.stag{display:inline-block;border-radius:5px;padding:3px 9px;font-size:10.5px;
+  font-weight:600;margin:2px;border:1px solid;}
+
+/* ── Storage card ── */
+.scard{background:#fff;border:2px solid;border-radius:9px;
+  padding:11px 14px;text-align:center;min-width:140px;flex:1;}
+.scard-icon{font-size:24px;line-height:1;margin-bottom:4px;}
+.scard-name{font-size:12px;font-weight:800;margin-bottom:3px;}
+.scard-desc{font-size:9.5px;color:#64748b;line-height:1.5;}
+
+/* ── AI card ── */
+.aicard{background:#fff;border:2px dashed;border-radius:9px;
+  padding:12px 16px;text-align:center;min-width:175px;}
+.aicard-icon{font-size:24px;line-height:1;margin-bottom:4px;}
+.aicard-name{font-size:12px;font-weight:800;margin-bottom:3px;}
+.aicard-desc{font-size:9.5px;color:#64748b;line-height:1.5;}
+
+/* ── DevOps flow ── */
+.dflow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;}
+.dstep{background:#fff;border:1.5px solid #e2e8f0;border-radius:7px;
+  padding:8px 14px;text-align:center;}
+.dstep-icon{font-size:20px;line-height:1;}
+.dstep-name{font-size:10.5px;font-weight:700;margin:3px 0 1px;}
+.dstep-desc{font-size:9px;color:#64748b;line-height:1.4;}
+.darrow{font-size:18px;color:#cbd5e1;font-weight:700;}
+</style>
+</head>
+<body>
+
+<div class="diagram">
+
+  <div class="d-title">
+    <h1>RoboKnow — Logical Architecture</h1>
+    <p>Enterprise AI Knowledge Management · RAG · Spring Boot 3 Monolith · Deployed on AWS EC2</p>
+  </div>
+
+  <!-- ─── Client Layer ─── -->
+  <div class="layer l-client">
+    <div class="lbl">
+      <span class="lbl-en">Client<br>Layer</span>
+    </div>
+    <div class="lcontent">
+      <div class="grp" style="border-color:#bfdbfe;">
+        <div class="grp-t">Access Devices</div>
+        <span class="chip">🖥️ PC Browser</span>
+        <span class="chip">📱 Mobile Browser</span>
+      </div>
+      <div class="grp" style="border-color:#bfdbfe;">
+        <div class="grp-t">Frontend Stack</div>
+        <span class="chip">⚡ Vue 3</span>
+        <span class="chip">🎨 Element Plus</span>
+        <span class="chip">🔷 TypeScript</span>
+        <span class="chip">🍍 Pinia</span>
+        <span class="chip">⚙️ Vite 4</span>
+        <span class="chip">📊 ECharts</span>
+        <span class="chip">🔗 Axios</span>
+        <span class="chip">Vue Router</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Gateway Layer ─── -->
+  <div class="layer l-gw">
+    <div class="lbl">
+      <span class="lbl-en">Gateway<br>Layer</span>
+    </div>
+    <div class="lcontent">
+      <div class="box" style="width:100%;">
+        <div class="box-t">Nginx · Port 8080</div>
+        <div class="box-b">
+          <span class="chip">🔀 Reverse Proxy → localhost:8081</span>
+          <span class="chip">🔌 WebSocket Proxy /proxy-ws</span>
+          <span class="chip">📁 Static File Serve (Vue SPA)</span>
+          <span class="chip">🔒 CORS Headers</span>
+          <span class="chip">Security Group: inbound 8080, 22</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Application Service Layer ─── -->
+  <div class="layer l-app">
+    <div class="lbl">
+      <span class="lbl-en">Application<br>Service Layer</span>
+    </div>
+    <div class="lcontent">
+      <div class="box" style="width:100%;">
+        <div class="box-t">Spring Boot 3 Monolith · Port 8081 · Single JAR</div>
+        <div class="box-b" style="margin-top:4px;">
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">🔐 Auth Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">👤 User Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">📄 Document Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">📤 Upload Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">🔍 Search Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">💬 Conversation Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">🧠 Agent Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">🏢 OrgTag Service</span>
+          <span class="stag" style="background:#fff7ed;border-color:#fdba74;color:#9a3412;">⚙️ Admin Service</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Core Component Layer ─── -->
+  <div class="layer l-core">
+    <div class="lbl">
+      <span class="lbl-en">Core<br>Component</span>
+    </div>
+    <div class="lcontent">
+      <div class="grp" style="border-color:#c4b5fd;">
+        <div class="grp-t">Security &amp; Auth</div>
+        <span class="chip">🔒 Spring Security</span>
+        <span class="chip">🎟️ JWT (JJWT)</span>
+        <span class="chip">BCrypt Password</span>
+        <span class="chip">Redis JWT Blacklist</span>
+        <span class="chip">OrgTag ACL Filter</span>
+      </div>
+      <div class="grp" style="border-color:#c4b5fd;">
+        <div class="grp-t">Messaging &amp; Streaming</div>
+        <span class="chip">📨 Kafka 3.2 (KRaft)</span>
+        <span class="chip">Exactly-once Semantics</span>
+        <span class="chip">🔌 WebSocket (STOMP)</span>
+        <span class="chip">SSE Token Streaming</span>
+      </div>
+      <div class="grp" style="border-color:#c4b5fd;">
+        <div class="grp-t">Document Processing</div>
+        <span class="chip">📑 Apache Tika</span>
+        <span class="chip">Text Chunking ≤512 chars</span>
+        <span class="chip">MD5 Dedup</span>
+        <span class="chip">Redis Bitmap (chunk tracker)</span>
+      </div>
+      <div class="grp" style="border-color:#c4b5fd;">
+        <div class="grp-t">Agent Framework (ReAct)</div>
+        <span class="chip">🔄 ReAct Loop (max 5 iter)</span>
+        <span class="chip">ToolRegistry</span>
+        <span class="chip">HybridSearchTool</span>
+        <span class="chip">MetadataFilterTool</span>
+        <span class="chip">STM (20-msg window)</span>
+        <span class="chip">LTM (3 summaries)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── AI Service Layer ─── -->
+  <div class="layer l-ai">
+    <div class="lbl">
+      <span class="lbl-en">AI Service<br>Layer</span>
+    </div>
+    <div class="lcontent" style="align-items:center;">
+      <div class="aicard" style="border-color:#c026d3;">
+        <div class="aicard-icon">🤖</div>
+        <div class="aicard-name">GPT-4o-mini</div>
+        <div class="aicard-desc">
+          Chat LLM · RAG Response Generation<br>
+          temperature 0.3 · top-p 0.9<br>
+          max-tokens 2000 / response
+        </div>
+      </div>
+      <div class="aicard" style="border-color:#7c3aed;">
+        <div class="aicard-icon">🔢</div>
+        <div class="aicard-name">text-embedding-3-large</div>
+        <div class="aicard-desc">
+          Vector Embedding · 2048-dim (MRL↓3072)<br>
+          Batch size 100 · cosine similarity<br>
+          Used for kNN search in Elasticsearch
+        </div>
+      </div>
+      <div style="font-size:10px;color:#94a3b8;font-style:italic;align-self:center;margin-left:4px;">
+        ← External (OpenAI API)<br>
+        via $OPENAI_API_KEY env var<br>
+        url: api.openai.com/v1
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Storage Layer ─── -->
+  <div class="layer l-store">
+    <div class="lbl">
+      <span class="lbl-en">Storage<br>Layer</span>
+    </div>
+    <div class="lcontent" style="flex-wrap:nowrap;">
+      <div class="scard" style="border-color:#3b82f6;">
+        <div class="scard-icon">🐬</div>
+        <div class="scard-name">MySQL 8.0</div>
+        <div class="scard-desc">
+          Port 3306 · Primary DB<br>
+          users · file_upload<br>
+          conversations · org_tags<br>
+          chunk_info · document_vectors
+        </div>
+      </div>
+      <div class="scard" style="border-color:#f59e0b;">
+        <div class="scard-icon">🔍</div>
+        <div class="scard-name">Elasticsearch 8.10</div>
+        <div class="scard-desc">
+          Port 9200 · IK Analyzer<br>
+          dense_vector 2048-dim kNN<br>
+          BM25 full-text + Hybrid Search<br>
+          index: documents
+        </div>
+      </div>
+      <div class="scard" style="border-color:#ef4444;">
+        <div class="scard-icon">🔴</div>
+        <div class="scard-name">Redis 7.0</div>
+        <div class="scard-desc">
+          Port 6379<br>
+          JWT blacklist<br>
+          Chunk upload bitmap<br>
+          OrgTag hierarchy cache
+        </div>
+      </div>
+      <div class="scard" style="border-color:#06b6d4;">
+        <div class="scard-icon">🗄️</div>
+        <div class="scard-name">MinIO</div>
+        <div class="scard-desc">
+          Port 19000 · S3-compatible<br>
+          Bucket: uploads<br>
+          File chunks + merged files<br>
+          Console: 19001
+        </div>
+      </div>
+      <div class="scard" style="border-color:#8b5cf6;">
+        <div class="scard-icon">📨</div>
+        <div class="scard-name">Kafka 3.2</div>
+        <div class="scard-desc">
+          Port 9092 · KRaft (no ZK)<br>
+          file-processing-topic1<br>
+          file-processing-dlt (DLT)<br>
+          Exactly-once producer
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── DevOps / CI/CD ─── -->
+  <div class="layer l-devops">
+    <div class="lbl">
+      <span class="lbl-en">DevOps<br>/ CI/CD</span>
+    </div>
+    <div class="lcontent">
+      <div class="dflow">
+        <div class="dstep">
+          <div class="dstep-icon">🐙</div>
+          <div class="dstep-name">GitHub</div>
+          <div class="dstep-desc">Source · PR<br>Branch: dev/api</div>
+        </div>
+        <div class="darrow">→</div>
+        <div class="dstep">
+          <div class="dstep-icon">⚙️</div>
+          <div class="dstep-name">Actions CI</div>
+          <div class="dstep-desc">JUnit5 · JaCoCo<br>Checkstyle · SpotBugs<br>OWASP · SonarQube<br>Docker image build</div>
+        </div>
+        <div class="darrow">→</div>
+        <div class="dstep">
+          <div class="dstep-icon">🚀</div>
+          <div class="dstep-name">Actions CD</div>
+          <div class="dstep-desc">Build JAR (mvn)<br>Build frontend (pnpm)<br>rsync bundle → EC2<br>Run deploy.sh</div>
+        </div>
+        <div class="darrow">→</div>
+        <div class="dstep">
+          <div class="dstep-icon">🐳</div>
+          <div class="dstep-name">Docker Compose</div>
+          <div class="dstep-desc">7 containers<br>MySQL · ES · MinIO<br>Redis · Kafka · Nginx<br>Spring Boot JAR</div>
+        </div>
+        <div class="darrow">→</div>
+        <div class="dstep">
+          <div class="dstep-icon">☁️</div>
+          <div class="dstep-name">AWS EC2</div>
+          <div class="dstep-desc">Single node<br>ap-east-1 (HK)<br>Public Subnet<br>10.0.1.0/24</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /diagram -->
+</body>
+</html>
