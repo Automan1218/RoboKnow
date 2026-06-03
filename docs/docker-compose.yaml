@@ -6,7 +6,7 @@ services:
     image: mysql:8
     restart: always
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
       MYSQL_DATABASE: PaiSmart
       MYSQL_ROOT_PASSWORD: PaiSmart2025
@@ -149,6 +149,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
 
 volumes:
   redis-data:
