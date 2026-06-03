@@ -17,8 +17,7 @@ import org.xml.sax.SAXException;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import com.hankcs.hanlp.seg.common.Term;
-import com.hankcs.hanlp.tokenizer.StandardTokenizer;
+import java.text.BreakIterator;
 
 @Service
 public class ParseService {
@@ -41,7 +40,6 @@ public class ParseService {
     private double maxMemoryThreshold;
     
     public ParseService() {
-        // 无需初始化，StandardTokenizer是静态方法
     }
 
     /**
@@ -281,41 +279,27 @@ public class ParseService {
         return chunks;
     }
 
-    /**
-     * 使用HanLP智能分割超长句子，中文按语义切割
-     */
     private List<String> splitLongSentence(String sentence, int chunkSize) {
         List<String> chunks = new ArrayList<>();
-        
-        try {
-            // 使用HanLP StandardTokenizer进行分词
-            List<Term> termList = StandardTokenizer.segment(sentence);
-            
-            StringBuilder currentChunk = new StringBuilder();
-            for (Term term : termList) {
-                String word = term.word;
-                
-                // 如果添加这个词会超过chunk大小限制，且当前chunk不为空
-                if (currentChunk.length() + word.length() > chunkSize && !currentChunk.isEmpty()) {
-                    chunks.add(currentChunk.toString());
-                    currentChunk = new StringBuilder();
-                }
-                
-                currentChunk.append(word);
-            }
-            
-            if (!currentChunk.isEmpty()) {
+        BreakIterator wordIterator = BreakIterator.getWordInstance();
+        wordIterator.setText(sentence);
+
+        StringBuilder currentChunk = new StringBuilder();
+        int start = wordIterator.first();
+        for (int end = wordIterator.next(); end != BreakIterator.DONE; start = end, end = wordIterator.next()) {
+            String word = sentence.substring(start, end);
+            if (currentChunk.length() + word.length() > chunkSize && !currentChunk.isEmpty()) {
                 chunks.add(currentChunk.toString());
+                currentChunk = new StringBuilder();
             }
-            
-            logger.debug("HanLP智能分词成功，原文长度: {}, 分词数: {}, 分块数: {}", 
-                    sentence.length(), termList.size(), chunks.size());
-                    
-        } catch (Exception e) {
-            logger.warn("HanLP分词异常: {}, 使用字符分割作为备用方案", e.getMessage());
-            chunks = splitByCharacters(sentence, chunkSize);
-         }
-        
+            currentChunk.append(word);
+        }
+
+        if (!currentChunk.isEmpty()) {
+            chunks.add(currentChunk.toString());
+        }
+
+        logger.debug("BreakIterator分词成功，原文长度: {}, 分块数: {}", sentence.length(), chunks.size());
         return chunks;
     }
     

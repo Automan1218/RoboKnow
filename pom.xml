@@ -167,13 +167,6 @@
             <version>2.10.1</version>
         </dependency>
 
-        <!-- HanLP for Chinese text segmentation -->
-        <dependency>
-            <groupId>com.hankcs</groupId>
-            <artifactId>hanlp</artifactId>
-            <version>portable-1.8.6</version>
-        </dependency>
-
     </dependencies>
 
     <build>
