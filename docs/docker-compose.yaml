@@ -36,17 +36,17 @@ services:
     command: server /data --console-address ":19001" -address ":19000"
 
   redis:
-    image: redis
+    image: redis:7-alpine
     container_name: redis
     restart: always
+    user: root
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
-      - /data/docker/redis:/logs
     healthcheck:
       start_period: 5s
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "PaiSmart2025", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
