@@ -206,6 +206,34 @@ declare namespace Api {
     }
   }
 
+  namespace AiUsage {
+    interface Summary {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      requestCount: number;
+      start?: string;
+      end?: string;
+    }
+
+    interface Record {
+      id: number;
+      username: string;
+      conversationId: string | null;
+      model: string;
+      operation: string;
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      createdAt: string;
+    }
+
+    interface Response {
+      summary: Summary;
+      records: Record[];
+    }
+  }
+
   namespace Document {
     interface DownloadResponse {
       fileName: string;

@@ -318,7 +318,10 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   }
 
   async function onRouteSwitchWhenLoggedIn() {
-    await authStore.initUserInfo();
+    // Intentionally not refreshing user info on every navigation.
+    // initUserInfo is called once during initAuthRoute (and after login).
+    // Re-fetching on every route switch can trigger resetStore() on transient
+    // API errors, which clears isInitAuthRoute and causes blank pages.
   }
 
   async function onRouteSwitchWhenNotLoggedIn() {

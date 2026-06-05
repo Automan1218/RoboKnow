@@ -35,9 +35,14 @@ function resetScroll() {
 
 <template>
   <RouterView v-slot="{ Component, route }">
+    <!--
+      Do NOT add `mode="out-in"`. It deadlocks with async pages (e.g. the chat
+      view's <Suspense> shiki provider): the leaving page never fires after-leave,
+      so the entering page never mounts and the content area stays blank until a
+      full page refresh. Simultaneous (default) mode is immune to this.
+    -->
     <Transition
       :name="transitionName"
-      mode="out-in"
       @before-leave="appStore.setContentXScrollable(true)"
       @after-leave="resetScroll"
       @after-enter="appStore.setContentXScrollable(false)"

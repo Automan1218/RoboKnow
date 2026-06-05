@@ -1,9 +1,9 @@
-package com.yizhaoqi.smartpai.service;
+package com.yizhaoqi.roboknow.service;
 
-import com.yizhaoqi.smartpai.model.Conversation;
-import com.yizhaoqi.smartpai.model.User;
-import com.yizhaoqi.smartpai.repository.ConversationRepository;
-import com.yizhaoqi.smartpai.repository.UserRepository;
+import com.yizhaoqi.roboknow.model.Conversation;
+import com.yizhaoqi.roboknow.model.User;
+import com.yizhaoqi.roboknow.repository.ConversationRepository;
+import com.yizhaoqi.roboknow.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

@@ -14,6 +14,11 @@ const appStore = useAppStore();
 // File preview state
 const previewVisible = ref(false);
 const previewFileName = ref('');
+const previewModalStyle = {
+  width: '94vw',
+  maxWidth: '1400px',
+  height: '88vh'
+};
 
 function apiFn() {
   return fakePaginationRequest<Api.KnowledgeBase.List>({ url: '/documents/uploads' });
@@ -129,35 +134,30 @@ onMounted(async () => {
   await getList();
 });
 
+onActivated(async () => {
+  await getList();
+});
+
 /** Fetch the latest list and sync upload task state. */
 async function getList() {
   // Fetch the latest data
   await getData();
 
   if (data.value.length === 0) {
-    tasks.value = [];
+    tasks.value = tasks.value.filter(item => item.status !== UploadStatus.Completed);
     return;
   }
 
-  // Sync each item into the task list
-  data.value.forEach(item => {
-    // Check whether the item is completed
-    if (item.status === UploadStatus.Completed) {
-      // Find the matching file MD5 in the task list
-      const index = tasks.value.findIndex(task => task.fileMd5 === item.fileMd5);
-      // Update the matched task state
-      if (index !== -1) {
-        tasks.value[index].status = UploadStatus.Completed;
-      } else {
-        // Add missing completed items to the task list
-        tasks.value.push(item);
-      }
-    } else if (!tasks.value.some(task => task.fileMd5 === item.fileMd5)) {
-      // Mark unfinished items that are not already tracked as interrupted
-      item.status = UploadStatus.Break;
-      tasks.value.push(item);
-    }
-  });
+  const serverFileMd5s = new Set(data.value.map(item => item.fileMd5));
+  const localUploadTasks = tasks.value.filter(
+    item => item.status !== UploadStatus.Completed && !serverFileMd5s.has(item.fileMd5)
+  );
+  const serverTasks = data.value.map(item => ({
+    ...item,
+    status: item.status === UploadStatus.Completed ? UploadStatus.Completed : UploadStatus.Break
+  }));
+
+  tasks.value = [...serverTasks, ...localUploadTasks];
 }
 
 async function handleDelete(fileMd5: string) {
@@ -295,14 +295,15 @@ async function onBeforeUpload(
     </NCard>
     <UploadDialog v-model:visible="uploadVisible" />
     <SearchDialog v-model:visible="searchVisible" />
-    
-    <!-- File preview modal -->
-    <NModal v-model:show="previewVisible" preset="card" title="File Preview" style="width: 80%; max-width: 1000px;">
-      <FilePreview
-        :file-name="previewFileName"
-        :visible="previewVisible"
-        @close="closeFilePreview"
-      />
+
+    <NModal
+      v-model:show="previewVisible"
+      preset="card"
+      title="File Preview"
+      class="file-preview-modal"
+      :style="previewModalStyle"
+    >
+      <FilePreview :file-name="previewFileName" :visible="previewVisible" class="h-full" @close="closeFilePreview" />
     </NModal>
   </div>
 </template>
@@ -310,6 +311,17 @@ async function onBeforeUpload(
 <style scoped lang="scss">
 .file-list-container {
   transition: width 0.3s ease;
+}
+
+:global(.file-preview-modal) {
+  width: 94vw;
+  max-width: 1400px;
+  height: 88vh;
+}
+
+:global(.file-preview-modal .n-card__content) {
+  height: calc(88vh - 86px);
+  min-height: 620px;
 }
 
 :deep() {

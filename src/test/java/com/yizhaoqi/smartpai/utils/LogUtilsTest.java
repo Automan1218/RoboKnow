@@ -1,4 +1,4 @@
-package com.yizhaoqi.smartpai.utils;
+package com.yizhaoqi.roboknow.utils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

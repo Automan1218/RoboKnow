@@ -14,12 +14,11 @@ function closePreview() {
 </script>
 
 <template>
-  <div class="flex-col gap-4">
-    <ChatList />
+  <div class="flex flex-col overflow-hidden" style="height:100%">
+    <ChatList class="min-h-0 flex-1" />
     <InputBox />
   </div>
 
-  <!-- File preview drawer (slides in from right) -->
   <NDrawer
     :show="previewVisible"
     :width="600"

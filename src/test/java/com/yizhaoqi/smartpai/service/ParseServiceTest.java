@@ -1,6 +1,6 @@
-package com.yizhaoqi.smartpai.service;
+package com.yizhaoqi.roboknow.service;
 
-import com.yizhaoqi.smartpai.repository.DocumentVectorRepository;
+import com.yizhaoqi.roboknow.repository.DocumentVectorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

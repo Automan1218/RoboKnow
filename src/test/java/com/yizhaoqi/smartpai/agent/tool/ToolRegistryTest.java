@@ -1,6 +1,6 @@
-package com.yizhaoqi.smartpai.agent.tool;
+package com.yizhaoqi.roboknow.agent.tool;
 
-import com.yizhaoqi.smartpai.agent.AgentContext;
+import com.yizhaoqi.roboknow.agent.AgentContext;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

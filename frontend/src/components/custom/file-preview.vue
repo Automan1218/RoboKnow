@@ -60,11 +60,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { NButton, NSpin } from 'naive-ui';
-import SvgIcon from '@/components/custom/svg-icon.vue';
 import { request } from '@/service/request';
 import { getFileExt } from '@/utils/common';
+import { getServiceBaseURL } from '@/utils/service';
+import { localStg } from '@/utils/storage';
+import SvgIcon from '@/components/custom/svg-icon.vue';
+
+const isHttpProxy = import.meta.env.DEV && import.meta.env.VITE_HTTP_PROXY === 'Y';
+const { baseURL } = getServiceBaseURL(import.meta.env, isHttpProxy);
 
 interface Props {
   fileName: string;
@@ -113,19 +118,14 @@ async function loadPreview() {
   presignedUrl.value = '';
 
   try {
-    const token = localStorage.getItem('token');
+    const token = localStg.get('token');
 
     if (fileType.value === 'pdf' || fileType.value === 'image') {
-      // Get presigned URL for binary files
-      const { error: reqErr, data } = await request<{ fileName: string; downloadUrl: string }>({
-        url: '/documents/download',
-        params: { fileName: props.fileName, token: token || undefined }
-      });
-      if (reqErr || !data) {
-        error.value = `Preview failed: ${reqErr?.message ?? 'Could not get file URL'}`;
-      } else {
-        presignedUrl.value = data.downloadUrl;
-      }
+      // Backend stream endpoint: sets Content-Type + Content-Disposition: inline
+      const params = new URLSearchParams({ fileName: props.fileName });
+      if (token) params.set('token', token);
+      params.set('_t', Date.now().toString());
+      presignedUrl.value = `${baseURL}/documents/stream?${params.toString()}`;
     } else {
       // Get text content for readable files
       const { error: reqErr, data } = await request<{ fileName: string; content: string }>({
@@ -149,7 +149,7 @@ async function downloadFile() {
   if (!props.fileName) return;
   downloading.value = true;
   try {
-    const token = localStorage.getItem('token');
+    const token = localStg.get('token');
     const { error: reqErr, data } = await request<{ fileName: string; downloadUrl: string }>({
       url: '/documents/download',
       params: { fileName: props.fileName, token: token || undefined }
@@ -179,7 +179,7 @@ function closePreview() {
 
 <style scoped lang="scss">
 .file-preview-container {
-  @apply h-full flex flex-col bg-white;
+  @apply h-full flex flex-col bg-white text-gray-900;
 
   .preview-header {
     @apply flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50 shrink-0;
@@ -197,7 +197,7 @@ function closePreview() {
     }
 
     .preview-text {
-      @apply text-sm font-mono whitespace-pre-wrap break-words;
+      @apply text-sm font-mono whitespace-pre-wrap break-words text-gray-900;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       line-height: 1.5;
       margin: 0;

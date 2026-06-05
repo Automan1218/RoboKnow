@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.yizhaoqi</groupId>
-    <artifactId>SmartPAI</artifactId>
+    <artifactId>RoboKnow</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>SmartPAI</name>
-    <description>SmartPAI</description>
+    <name>RoboKnow</name>
+    <description>RoboKnow</description>
     <url/>
     <licenses>
         <license/>
@@ -194,7 +194,7 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
-                    <jvmArguments>-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</jvmArguments>
+                    <jvmArguments>-Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8</jvmArguments>
                 </configuration>
             </plugin>
             <plugin>
@@ -203,19 +203,19 @@
                 <version>0.8.12</version>
                 <configuration>
                     <includes>
-                        <include>com/yizhaoqi/smartpai/controller/AuthController*</include>
-                        <include>com/yizhaoqi/smartpai/controller/UserController*</include>
-                        <include>com/yizhaoqi/smartpai/controller/UploadController*</include>
-                        <include>com/yizhaoqi/smartpai/controller/DocumentController*</include>
-                        <include>com/yizhaoqi/smartpai/controller/SearchController*</include>
-                        <include>com/yizhaoqi/smartpai/controller/ChatController*</include>
-                        <include>com/yizhaoqi/smartpai/controller/ConversationController*</include>
-                        <include>com/yizhaoqi/smartpai/service/FileTypeValidationService*</include>
-                        <include>com/yizhaoqi/smartpai/service/ConversationService*</include>
-                        <include>com/yizhaoqi/smartpai/service/ChatHandler*</include>
-                        <include>com/yizhaoqi/smartpai/model/User*</include>
-                        <include>com/yizhaoqi/smartpai/model/FileUpload*</include>
-                        <include>com/yizhaoqi/smartpai/entity/SearchResult*</include>
+                        <include>com/yizhaoqi/roboknow/controller/AuthController*</include>
+                        <include>com/yizhaoqi/roboknow/controller/UserController*</include>
+                        <include>com/yizhaoqi/roboknow/controller/UploadController*</include>
+                        <include>com/yizhaoqi/roboknow/controller/DocumentController*</include>
+                        <include>com/yizhaoqi/roboknow/controller/SearchController*</include>
+                        <include>com/yizhaoqi/roboknow/controller/ChatController*</include>
+                        <include>com/yizhaoqi/roboknow/controller/ConversationController*</include>
+                        <include>com/yizhaoqi/roboknow/service/FileTypeValidationService*</include>
+                        <include>com/yizhaoqi/roboknow/service/ConversationService*</include>
+                        <include>com/yizhaoqi/roboknow/service/ChatHandler*</include>
+                        <include>com/yizhaoqi/roboknow/model/User*</include>
+                        <include>com/yizhaoqi/roboknow/model/FileUpload*</include>
+                        <include>com/yizhaoqi/roboknow/entity/SearchResult*</include>
                     </includes>
                     <rules>
                         <rule>

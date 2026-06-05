@@ -121,24 +121,25 @@ async function initRoute(to: RouteLocationNormalized): Promise<RouteLocationRaw 
     // initialize the auth route
     await routeStore.initAuthRoute();
 
-    // the route is captured by the "not-found" route because the auth route is not initialized
-    // after the auth route is initialized, redirect to the original route
-    if (isNotFoundRoute) {
-      const rootRoute: RouteKey = 'root';
-      const path = to.redirectedFrom?.name === rootRoute ? '/' : to.fullPath;
+    // Always redirect after adding dynamic routes so Vue Router re-evaluates
+    // the route match against the newly registered routes. Without this,
+    // navigating to a valid auth route while isInitAuthRoute was false (e.g.,
+    // after resetStore()) leaves the router using a stale "not-found" match,
+    // resulting in a blank page.
+    const rootRoute: RouteKey = 'root';
+    const path = to.redirectedFrom?.name === rootRoute ? '/' : to.fullPath;
 
-      const location: RouteLocationRaw = {
-        path,
-        replace: true,
-        query: to.query,
-        hash: to.hash
-      };
+    const location: RouteLocationRaw = {
+      path,
+      replace: true,
+      query: to.query,
+      hash: to.hash
+    };
 
-      return location;
-    }
+    return location;
   }
 
-  routeStore.onRouteSwitchWhenLoggedIn();
+  await routeStore.onRouteSwitchWhenLoggedIn();
 
   // the auth route is initialized
   // it is not the "not-found" route, then it is allowed to access
