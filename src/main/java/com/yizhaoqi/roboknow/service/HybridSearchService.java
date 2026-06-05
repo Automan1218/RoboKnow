@@ -454,16 +454,11 @@ public class HybridSearchService {
     }
 
     private boolean isSearchResultAccessible(SearchResult result, String userDbId, List<String> userEffectiveTags) {
-        if (result == null) {
-            return false;
-        }
-        if (userDbId != null && userDbId.equals(result.getUserId())) {
-            return true;
-        }
-        if (Boolean.TRUE.equals(result.getIsPublic())) {
-            return true;
-        }
-
+        if (result == null) return false;
+        if (userDbId != null && userDbId.equals(result.getUserId())) return true;
+        if (Boolean.TRUE.equals(result.getIsPublic())) return true;
+        if (userEffectiveTags != null && result.getOrgTag() != null
+                && userEffectiveTags.contains(result.getOrgTag())) return true;
         return false;
     }
 

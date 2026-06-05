@@ -200,53 +200,56 @@ public class ParseService {
     }
 
     /**
-     * 智能文本分割，保持语义完整性
+     * 语义分割：用 BreakIterator.getSentenceInstance 切句，再按 chunkSize 滑动聚合。
+     * 不依赖换行结构，对 PDF/Word 解析后的英文和中文文本均有效。
      */
     private List<String> splitTextIntoChunksWithSemantics(String text, int chunkSize) {
+        List<String> sentences = extractSentences(text);
+        if (sentences.isEmpty()) return List.of();
+
         List<String> chunks = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
 
-        // 按段落分割
-        String[] paragraphs = text.split("\n\n+");
-
-        StringBuilder currentChunk = new StringBuilder();
-
-        for (String paragraph : paragraphs) {
-            // 如果单个段落超过chunk大小，需要进一步分割
-            if (paragraph.length() > chunkSize) {
-                // 先保存当前chunk
-                if (currentChunk.length() > 0) {
-                    chunks.add(currentChunk.toString().trim());
-                    currentChunk = new StringBuilder();
+        for (String sentence : sentences) {
+            // 单句超过 chunkSize：直接切词后加入
+            if (sentence.length() > chunkSize) {
+                if (!current.isEmpty()) {
+                    chunks.add(current.toString().trim());
+                    current = new StringBuilder();
                 }
-
-                // 按句子分割长段落
-                List<String> sentenceChunks = splitLongParagraph(paragraph, chunkSize);
-                chunks.addAll(sentenceChunks);
+                chunks.addAll(splitLongSentence(sentence, chunkSize));
+                continue;
             }
-            // 如果添加这个段落会超过chunk大小
-            else if (currentChunk.length() + paragraph.length() > chunkSize) {
-                // 保存当前chunk
-                if (currentChunk.length() > 0) {
-                    chunks.add(currentChunk.toString().trim());
-                }
-                // 开始新chunk
-                currentChunk = new StringBuilder(paragraph);
+            // 加入本句会超限：先提交当前块，再开新块
+            if (current.length() + sentence.length() > chunkSize && !current.isEmpty()) {
+                chunks.add(current.toString().trim());
+                current = new StringBuilder();
             }
-            // 可以添加到当前chunk
-            else {
-                if (currentChunk.length() > 0) {
-                    currentChunk.append("\n\n");
-                }
-                currentChunk.append(paragraph);
-            }
+            current.append(sentence);
         }
-
-        // 添加最后一个chunk
-        if (currentChunk.length() > 0) {
-            chunks.add(currentChunk.toString().trim());
+        if (!current.isEmpty()) {
+            chunks.add(current.toString().trim());
         }
 
         return applySemanticOverlap(chunks, chunkSize);
+    }
+
+    /**
+     * 用 BreakIterator 提取句子列表，自动适配英文/中文语言边界。
+     * 对无明确句点的简历 bullet 行，BreakIterator 会在换行处断句。
+     */
+    private List<String> extractSentences(String text) {
+        List<String> result = new ArrayList<>();
+        BreakIterator bi = BreakIterator.getSentenceInstance(java.util.Locale.ROOT);
+        bi.setText(text);
+        int start = bi.first();
+        for (int end = bi.next(); end != BreakIterator.DONE; start = end, end = bi.next()) {
+            String sentence = text.substring(start, end);
+            if (!sentence.isBlank()) {
+                result.add(sentence);
+            }
+        }
+        return result;
     }
 
     private List<String> applySemanticOverlap(List<String> chunks, int chunkSize) {
@@ -318,41 +321,6 @@ public class ParseService {
         return "";
     }
 
-    /**
-     * 分割长段落，按句子边界
-     */
-    private List<String> splitLongParagraph(String paragraph, int chunkSize) {
-        List<String> chunks = new ArrayList<>();
-
-        // 按句子分割
-        String[] sentences = paragraph.split("(?<=[。！？；])|(?<=[.!?;])\\s+");
-
-        StringBuilder currentChunk = new StringBuilder();
-
-        for (String sentence : sentences) {
-            if (currentChunk.length() + sentence.length() > chunkSize) {
-                if (currentChunk.length() > 0) {
-                    chunks.add(currentChunk.toString().trim());
-                    currentChunk = new StringBuilder();
-                }
-
-                // 如果单个句子太长，按词分割
-                if (sentence.length() > chunkSize) {
-                    chunks.addAll(splitLongSentence(sentence, chunkSize));
-                } else {
-                    currentChunk.append(sentence);
-                }
-            } else {
-                currentChunk.append(sentence);
-            }
-        }
-
-        if (currentChunk.length() > 0) {
-            chunks.add(currentChunk.toString().trim());
-        }
-
-        return chunks;
-    }
 
     private List<String> splitLongSentence(String sentence, int chunkSize) {
         List<String> chunks = new ArrayList<>();

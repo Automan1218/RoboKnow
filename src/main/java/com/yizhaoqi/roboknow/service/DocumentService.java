@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * 文档管理服务类
@@ -155,12 +154,10 @@ public class DocumentService {
             // 使用有效标签查询文件
             List<FileUpload> files;
             if (userEffectiveTags.isEmpty()) {
-                // 如果用户没有任何组织标签，只返回自己的文件和公开文件
                 files = fileUploadRepository.findByUserIdInOrIsPublicTrue(ownerIds);
                 logger.debug("用户无组织标签，仅返回个人和公开文件");
             } else {
-                // 查询用户可访问的所有文件（考虑层级标签）
-                files = fileUploadRepository.findAccessibleFilesWithTags(ownerIds);
+                files = fileUploadRepository.findAccessibleFilesWithTags(ownerIds, userEffectiveTags);
                 logger.debug("使用有效组织标签查询文件");
             }
             

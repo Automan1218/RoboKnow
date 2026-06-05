@@ -30,7 +30,6 @@ public class OrgTagCacheService {
     private static final String USER_PRIMARY_ORG_KEY_PREFIX = "user:primary_org:";
     private static final String USER_EFFECTIVE_TAGS_KEY_PREFIX = "user:effective_org_tags:";
     private static final long CACHE_TTL_HOURS = 24;
-    private static final String DEFAULT_ORG_TAG = "DEFAULT";
     
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -140,16 +139,9 @@ public class OrgTagCacheService {
             List<Object> cachedTags = redisTemplate.opsForList().range(cacheKey, 0, -1);
             
             if (cachedTags != null && !cachedTags.isEmpty()) {
-                List<String> effectiveTags = cachedTags.stream()
+                return cachedTags.stream()
                         .map(Object::toString)
                         .collect(Collectors.toList());
-                
-                // 确保默认标签在结果中（从缓存读取的情况）
-                if (!effectiveTags.contains(DEFAULT_ORG_TAG)) {
-                    effectiveTags.add(DEFAULT_ORG_TAG);
-                }
-                
-                return effectiveTags;
             }
             
             // 缓存未命中，计算有效标签集合
@@ -166,9 +158,6 @@ public class OrgTagCacheService {
                 }
             }
             
-            // 确保默认标签在结果中
-            allEffectiveTags.add(DEFAULT_ORG_TAG);
-            
             List<String> result = new ArrayList<>(allEffectiveTags);
             
             // 缓存结果
@@ -180,8 +169,7 @@ public class OrgTagCacheService {
             return result;
         } catch (Exception e) {
             logger.error("Failed to get effective organization tags for user: {}", username, e);
-            // 错误情况下至少返回默认标签
-            return Collections.singletonList(DEFAULT_ORG_TAG);
+            return Collections.emptyList();
         }
     }
     
