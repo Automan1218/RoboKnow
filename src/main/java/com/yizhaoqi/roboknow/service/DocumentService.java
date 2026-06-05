@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * æ–‡æ¡£ç®¡ç†æœåŠ¡ç±»
- * è´Ÿè´£æ–‡æ¡£çš„åˆ é™¤ç­‰ç®¡ç†æ“ä½œ
+ * 文档管理服务类
+ * 负责文档的删除等管理操作
  */
 @Service
 public class DocumentService {
@@ -62,42 +62,42 @@ public class DocumentService {
         try {
             Long id = Long.parseLong(userIdOrUsername);
             return userRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("ç”¨æˆ·ä¸å­˜åœ¨: " + userIdOrUsername));
+                    .orElseThrow(() -> new RuntimeException("用户不存在: " + userIdOrUsername));
         } catch (NumberFormatException e) {
             return userRepository.findByUsername(userIdOrUsername)
-                    .orElseThrow(() -> new RuntimeException("ç”¨æˆ·ä¸å­˜åœ¨: " + userIdOrUsername));
+                    .orElseThrow(() -> new RuntimeException("用户不存在: " + userIdOrUsername));
         }
     }
 
     /**
-     * åˆ é™¤æ–‡æ¡£åŠå…¶ç›¸å…³æ•°æ®
-     * è¯¥æ–¹æ³•å°†åˆ é™¤:
-     * 1. FileUploadè®°å½•
-     * 2. DocumentVectorè®°å½•
-     * 3. MinIOä¸­çš„æ–‡ä»¶
-     * 4. Elasticsearchä¸­çš„å‘é‡æ•°æ®
+     * 删除文档及其相关数据
+     * 该方法将删除:
+     * 1. FileUpload记录
+     * 2. DocumentVector记录
+     * 3. MinIO中的文件
+     * 4. Elasticsearch中的向量数据
      *
-     * @param fileMd5 æ–‡ä»¶MD5
+     * @param fileMd5 文件MD5
      */
     @Transactional
     public void deleteDocument(String fileMd5, String userId) {
-        logger.info("å¼€å§‹åˆ é™¤æ–‡æ¡£: {}", fileMd5);
+        logger.info("开始删除文档: {}", fileMd5);
         
         try {
-            // èŽ·å–æ–‡ä»¶ä¿¡æ¯ä»¥èŽ·å–æ–‡ä»¶å
+            // 获取文件信息以获取文件名
             FileUpload fileUpload = fileUploadRepository.findByFileMd5AndUserId(fileMd5, userId)
-                    .orElseThrow(() -> new RuntimeException("æ–‡ä»¶ä¸å­˜åœ¨"));
+                    .orElseThrow(() -> new RuntimeException("文件不存在"));
             
-            // 1. åˆ é™¤Elasticsearchä¸­çš„æ•°æ®
+            // 1. 删除Elasticsearch中的数据
             try {
                 elasticsearchService.deleteByFileMd5(fileMd5);
-                logger.info("æˆåŠŸä»ŽElasticsearchåˆ é™¤æ–‡æ¡£: {}", fileMd5);
+                logger.info("成功从Elasticsearch删除文档: {}", fileMd5);
             } catch (Exception e) {
-                logger.error("ä»ŽElasticsearchåˆ é™¤æ–‡æ¡£æ—¶å‡ºé”™: {}", fileMd5, e);
-                // ç»§ç»­åˆ é™¤å…¶ä»–æ•°æ®
+                logger.error("从Elasticsearch删除文档时出错: {}", fileMd5, e);
+                // 继续删除其他数据
             }
             
-            // 2. åˆ é™¤MinIOä¸­çš„æ–‡ä»¶
+            // 2. 删除MinIO中的文件
             try {
                 String objectName = "merged/" + fileUpload.getFileName();
                 minioClient.removeObject(
@@ -106,111 +106,111 @@ public class DocumentService {
                                 .object(objectName)
                                 .build()
                 );
-                logger.info("æˆåŠŸä»ŽMinIOåˆ é™¤æ–‡ä»¶: {}", objectName);
+                logger.info("成功从MinIO删除文件: {}", objectName);
             } catch (Exception e) {
-                logger.error("ä»ŽMinIOåˆ é™¤æ–‡ä»¶æ—¶å‡ºé”™: {}", fileMd5, e);
-                // ç»§ç»­åˆ é™¤å…¶ä»–æ•°æ®
+                logger.error("从MinIO删除文件时出错: {}", fileMd5, e);
+                // 继续删除其他数据
             }
             
-            // 3. åˆ é™¤DocumentVectorè®°å½•
+            // 3. 删除DocumentVector记录
             try {
                 documentVectorRepository.deleteByFileMd5(fileMd5);
-                logger.info("æˆåŠŸåˆ é™¤æ–‡æ¡£å‘é‡è®°å½•: {}", fileMd5);
+                logger.info("成功删除文档向量记录: {}", fileMd5);
             } catch (Exception e) {
-                logger.error("åˆ é™¤æ–‡æ¡£å‘é‡è®°å½•æ—¶å‡ºé”™: {}", fileMd5, e);
-                // ç»§ç»­åˆ é™¤å…¶ä»–æ•°æ®
+                logger.error("删除文档向量记录时出错: {}", fileMd5, e);
+                // 继续删除其他数据
             }
             
-            // 4. åˆ é™¤FileUploadè®°å½•
+            // 4. 删除FileUpload记录
             fileUploadRepository.deleteByFileMd5(fileMd5);
-            logger.info("æˆåŠŸåˆ é™¤æ–‡ä»¶ä¸Šä¼ è®°å½•: {}", fileMd5);
+            logger.info("成功删除文件上传记录: {}", fileMd5);
             
-            logger.info("æ–‡æ¡£åˆ é™¤å®Œæˆ: {}", fileMd5);
+            logger.info("文档删除完成: {}", fileMd5);
         } catch (Exception e) {
-            logger.error("åˆ é™¤æ–‡æ¡£è¿‡ç¨‹ä¸­å‘ç”Ÿé”™è¯¯: {}", fileMd5, e);
-            throw new RuntimeException("åˆ é™¤æ–‡æ¡£å¤±è´¥: " + e.getMessage(), e);
+            logger.error("删除文档过程中发生错误: {}", fileMd5, e);
+            throw new RuntimeException("删除文档失败: " + e.getMessage(), e);
         }
     }
     
     /**
-     * èŽ·å–ç”¨æˆ·å¯è®¿é—®çš„æ‰€æœ‰æ–‡ä»¶åˆ—è¡¨
-     * åŒ…æ‹¬ç”¨æˆ·è‡ªå·±çš„æ–‡ä»¶ã€å…¬å¼€æ–‡ä»¶å’Œç”¨æˆ·æ‰€å±žç»„ç»‡çš„æ–‡ä»¶ï¼ˆæ”¯æŒå±‚çº§æƒé™ï¼‰
+     * 获取用户可访问的所有文件列表
+     * 包括用户自己的文件、公开文件和用户所属组织的文件（支持层级权限）
      *
-     * @param userId ç”¨æˆ·ID
-     * @param orgTags ç”¨æˆ·æ‰€å±žçš„ç»„ç»‡æ ‡ç­¾ï¼ˆé€—å·åˆ†éš”çš„å­—ç¬¦ä¸²ï¼Œä»…ä¾›å…¼å®¹æ€§ä½¿ç”¨ï¼‰
-     * @return ç”¨æˆ·å¯è®¿é—®çš„æ–‡ä»¶åˆ—è¡¨
+     * @param userId 用户ID
+     * @param orgTags 用户所属的组织标签（逗号分隔的字符串，仅供兼容性使用）
+     * @return 用户可访问的文件列表
      */
     public List<FileUpload> getAccessibleFiles(String userId, String orgTags) {
-        logger.info("èŽ·å–ç”¨æˆ·å¯è®¿é—®æ–‡ä»¶åˆ—è¡¨: userId={}", userId);
+        logger.info("获取用户可访问文件列表: userId={}", userId);
         
         try {
-            // èŽ·å–ç”¨æˆ·æœ‰æ•ˆçš„ç»„ç»‡æ ‡ç­¾ï¼ˆåŒ…å«å±‚çº§å…³ç³»ï¼‰
+            // 获取用户有效的组织标签（包含层级关系）
             User user = resolveUser(userId);
             String dbUserId = user.getId().toString();
             List<String> ownerIds = List.of(dbUserId, user.getUsername());
             
             List<String> userEffectiveTags = orgTagCacheService.getUserEffectiveOrgTags(user.getUsername());
-            logger.debug("ç”¨æˆ·æœ‰æ•ˆç»„ç»‡æ ‡ç­¾: {}", userEffectiveTags);
+            logger.debug("用户有效组织标签: {}", userEffectiveTags);
             
-            // ä½¿ç”¨æœ‰æ•ˆæ ‡ç­¾æŸ¥è¯¢æ–‡ä»¶
+            // 使用有效标签查询文件
             List<FileUpload> files;
             if (userEffectiveTags.isEmpty()) {
-                // å¦‚æžœç”¨æˆ·æ²¡æœ‰ä»»ä½•ç»„ç»‡æ ‡ç­¾ï¼Œåªè¿”å›žè‡ªå·±çš„æ–‡ä»¶å’Œå…¬å¼€æ–‡ä»¶
+                // 如果用户没有任何组织标签，只返回自己的文件和公开文件
                 files = fileUploadRepository.findByUserIdInOrIsPublicTrue(ownerIds);
-                logger.debug("ç”¨æˆ·æ— ç»„ç»‡æ ‡ç­¾ï¼Œä»…è¿”å›žä¸ªäººå’Œå…¬å¼€æ–‡ä»¶");
+                logger.debug("用户无组织标签，仅返回个人和公开文件");
             } else {
-                // æŸ¥è¯¢ç”¨æˆ·å¯è®¿é—®çš„æ‰€æœ‰æ–‡ä»¶ï¼ˆè€ƒè™‘å±‚çº§æ ‡ç­¾ï¼‰
+                // 查询用户可访问的所有文件（考虑层级标签）
                 files = fileUploadRepository.findAccessibleFilesWithTags(ownerIds);
-                logger.debug("ä½¿ç”¨æœ‰æ•ˆç»„ç»‡æ ‡ç­¾æŸ¥è¯¢æ–‡ä»¶");
+                logger.debug("使用有效组织标签查询文件");
             }
             
-            logger.info("æˆåŠŸèŽ·å–ç”¨æˆ·å¯è®¿é—®æ–‡ä»¶åˆ—è¡¨: userId={}, fileCount={}", userId, files.size());
+            logger.info("成功获取用户可访问文件列表: userId={}, fileCount={}", userId, files.size());
             return files;
         } catch (Exception e) {
-            logger.error("èŽ·å–ç”¨æˆ·å¯è®¿é—®æ–‡ä»¶åˆ—è¡¨å¤±è´¥: userId={}", userId, e);
-            throw new RuntimeException("èŽ·å–å¯è®¿é—®æ–‡ä»¶åˆ—è¡¨å¤±è´¥: " + e.getMessage(), e);
+            logger.error("获取用户可访问文件列表失败: userId={}", userId, e);
+            throw new RuntimeException("获取可访问文件列表失败: " + e.getMessage(), e);
         }
     }
     
     /**
-     * èŽ·å–ç”¨æˆ·ä¸Šä¼ çš„æ‰€æœ‰æ–‡ä»¶åˆ—è¡¨
+     * 获取用户上传的所有文件列表
      *
-     * @param userId ç”¨æˆ·ID
-     * @return ç”¨æˆ·ä¸Šä¼ çš„æ–‡ä»¶åˆ—è¡¨
+     * @param userId 用户ID
+     * @return 用户上传的文件列表
      */
     public List<FileUpload> getUserUploadedFiles(String userId) {
-        logger.info("èŽ·å–ç”¨æˆ·ä¸Šä¼ çš„æ–‡ä»¶åˆ—è¡¨: userId={}", userId);
+        logger.info("获取用户上传的文件列表: userId={}", userId);
         
         try {
             User user = resolveUser(userId);
             List<FileUpload> files = fileUploadRepository.findByUserIdIn(List.of(user.getId().toString(), user.getUsername()));
-            logger.info("æˆåŠŸèŽ·å–ç”¨æˆ·ä¸Šä¼ çš„æ–‡ä»¶åˆ—è¡¨: userId={}, fileCount={}", userId, files.size());
+            logger.info("成功获取用户上传的文件列表: userId={}, fileCount={}", userId, files.size());
             return files;
         } catch (Exception e) {
-            logger.error("èŽ·å–ç”¨æˆ·ä¸Šä¼ çš„æ–‡ä»¶åˆ—è¡¨å¤±è´¥: userId={}", userId, e);
-            throw new RuntimeException("èŽ·å–ç”¨æˆ·ä¸Šä¼ çš„æ–‡ä»¶åˆ—è¡¨å¤±è´¥: " + e.getMessage(), e);
+            logger.error("获取用户上传的文件列表失败: userId={}", userId, e);
+            throw new RuntimeException("获取用户上传的文件列表失败: " + e.getMessage(), e);
         }
     }
     
     /**
-     * ç”Ÿæˆæ–‡ä»¶ä¸‹è½½é“¾æŽ¥
+     * 生成文件下载链接
      * 
-     * @param fileMd5 æ–‡ä»¶MD5
-     * @return é¢„ç­¾åä¸‹è½½URL
+     * @param fileMd5 文件MD5
+     * @return 预签名下载URL
      */
     public String generateDownloadUrl(String fileMd5) {
-        logger.info("ç”Ÿæˆæ–‡ä»¶ä¸‹è½½é“¾æŽ¥: fileMd5={}", fileMd5);
+        logger.info("生成文件下载链接: fileMd5={}", fileMd5);
         
         try {
-            // ä»Žæ•°æ®åº“èŽ·å–æ–‡ä»¶ä¿¡æ¯
+            // 从数据库获取文件信息
             FileUpload fileUpload = fileUploadRepository.findByFileMd5(fileMd5)
-                    .orElseThrow(() -> new RuntimeException("æ–‡ä»¶ä¸å­˜åœ¨: " + fileMd5));
+                    .orElseThrow(() -> new RuntimeException("文件不存在: " + fileMd5));
             
-            // MinIOä¸­çš„å¯¹è±¡è·¯å¾„æ ¼å¼: merged/æ–‡ä»¶å
+            // MinIO中的对象路径格式: merged/文件名
             String objectName = "merged/" + fileUpload.getFileName();
             
-            // ç”Ÿæˆé¢„ç­¾åURLï¼Œæœ‰æ•ˆæœŸ1å°æ—¶
-            // response-content-disposition=inline è®©æµè§ˆå™¨å†…è”å±•ç¤ºè€Œéžä¸‹è½½
+            // 生成预签名URL，有效期1小时
+            // response-content-disposition=inline 让浏览器内联展示而非下载
             Map<String, String> extraQueryParams = new HashMap<>();
             extraQueryParams.put("response-content-disposition", "inline");
             String presignedUrl = minioClient.getPresignedObjectUrl(
@@ -218,40 +218,40 @@ public class DocumentService {
                             .method(Method.GET)
                             .bucket("uploads")
                             .object(objectName)
-                            .expiry(3600) // 1å°æ—¶æœ‰æ•ˆæœŸ
+                            .expiry(3600) // 1小时有效期
                             .extraQueryParams(extraQueryParams)
                             .build()
             );
             
-            logger.info("æˆåŠŸç”Ÿæˆæ–‡ä»¶ä¸‹è½½é“¾æŽ¥: fileMd5={}, fileName={}, objectName={}", 
+            logger.info("成功生成文件下载链接: fileMd5={}, fileName={}, objectName={}", 
                     fileMd5, fileUpload.getFileName(), objectName);
             return presignedUrl;
         } catch (Exception e) {
-            logger.error("ç”Ÿæˆæ–‡ä»¶ä¸‹è½½é“¾æŽ¥å¤±è´¥: fileMd5={}", fileMd5, e);
+            logger.error("生成文件下载链接失败: fileMd5={}", fileMd5, e);
             return null;
         }
     }
     
     /**
-     * èŽ·å–æ–‡ä»¶é¢„è§ˆå†…å®¹
+     * 获取文件预览内容
      * 
-     * @param fileMd5 æ–‡ä»¶MD5
-     * @param fileName æ–‡ä»¶å
-     * @return æ–‡ä»¶é¢„è§ˆå†…å®¹ï¼Œå¯¹äºŽæ–‡æœ¬æ–‡ä»¶è¿”å›žå‰å‡ KBå†…å®¹ï¼Œéžæ–‡æœ¬æ–‡ä»¶è¿”å›žæ–‡ä»¶ä¿¡æ¯
+     * @param fileMd5 文件MD5
+     * @param fileName 文件名
+     * @return 文件预览内容，对于文本文件返回前几KB内容，非文本文件返回文件信息
      */
     public String getFilePreviewContent(String fileMd5, String fileName) {
-        logger.info("èŽ·å–æ–‡ä»¶é¢„è§ˆå†…å®¹: fileMd5={}, fileName={}", fileMd5, fileName);
+        logger.info("获取文件预览内容: fileMd5={}, fileName={}", fileMd5, fileName);
         
         try {
-            // MinIOä¸­çš„å¯¹è±¡è·¯å¾„æ ¼å¼: merged/æ–‡ä»¶å
+            // MinIO中的对象路径格式: merged/文件名
             String objectName = "merged/" + fileName;
             
-            // åˆ¤æ–­æ–‡ä»¶ç±»åž‹
+            // 判断文件类型
             String fileExtension = getFileExtension(fileName).toLowerCase();
             boolean isTextFile = isTextFile(fileExtension);
             
             if (isTextFile) {
-                // å¯¹äºŽæ–‡æœ¬æ–‡ä»¶ï¼Œè¯»å–å‰10KBå†…å®¹
+                // 对于文本文件，读取前10KB内容
                 try (InputStream inputStream = minioClient.getObject(
                         GetObjectArgs.builder()
                                 .bucket("uploads")
@@ -274,7 +274,7 @@ public class DocumentService {
                         result += PREVIEW_TRUNCATED_MESSAGE;
                     }
                     
-                    logger.info("æˆåŠŸèŽ·å–æ–‡æœ¬æ–‡ä»¶é¢„è§ˆå†…å®¹: fileMd5={}, contentLength={}", fileMd5, result.length());
+                    logger.info("成功获取文本文件预览内容: fileMd5={}, contentLength={}", fileMd5, result.length());
                     return result;
                 }
             } else if (isExtractableDocument(fileExtension)) {
@@ -289,34 +289,34 @@ public class DocumentService {
                     return result;
                 }
             } else {
-                // å¯¹äºŽéžæ–‡æœ¬æ–‡ä»¶ï¼Œè¿”å›žæ–‡ä»¶ä¿¡æ¯
+                // 对于非文本文件，返回文件信息
                 FileUpload fileUpload = fileUploadRepository.findByFileMd5(fileMd5)
-                        .orElseThrow(() -> new RuntimeException("æ–‡ä»¶ä¸å­˜åœ¨: " + fileMd5));
+                        .orElseThrow(() -> new RuntimeException("文件不存在: " + fileMd5));
                 
                 String fileInfo = String.format(
-                    "æ–‡ä»¶å: %s\n" +
-                    "æ–‡ä»¶å¤§å°: %s\n" +
-                    "æ–‡ä»¶ç±»åž‹: %s\n" +
-                    "ä¸Šä¼ æ—¶é—´: %s\n\n" +
-                    "æ­¤æ–‡ä»¶ç±»åž‹ä¸æ”¯æŒé¢„è§ˆï¼Œè¯·ä¸‹è½½åŽæŸ¥çœ‹ã€‚",
+                    "文件名: %s\n" +
+                    "文件大小: %s\n" +
+                    "文件类型: %s\n" +
+                    "上传时间: %s\n\n" +
+                    "此文件类型不支持预览，请下载后查看。",
                     fileName,
                     formatFileSize(fileUpload.getTotalSize()),
                     fileExtension.toUpperCase(),
                     fileUpload.getCreatedAt()
                 );
                 
-                logger.info("è¿”å›žéžæ–‡æœ¬æ–‡ä»¶ä¿¡æ¯: fileMd5={}", fileMd5);
+                logger.info("返回非文本文件信息: fileMd5={}", fileMd5);
                 return fileInfo;
             }
             
         } catch (Exception e) {
-            logger.error("èŽ·å–æ–‡ä»¶é¢„è§ˆå†…å®¹å¤±è´¥: fileMd5={}, fileName={}", fileMd5, fileName, e);
-            return "é¢„è§ˆå¤±è´¥: " + e.getMessage();
+            logger.error("获取文件预览内容失败: fileMd5={}, fileName={}", fileMd5, fileName, e);
+            return "预览失败: " + e.getMessage();
         }
     }
     
     /**
-     * èŽ·å–æ–‡ä»¶æ‰©å±•å
+     * 获取文件扩展名
      */
     private String getFileExtension(String fileName) {
         int lastDotIndex = fileName.lastIndexOf('.');
@@ -327,7 +327,7 @@ public class DocumentService {
     }
     
     /**
-     * åˆ¤æ–­æ˜¯å¦ä¸ºæ–‡æœ¬æ–‡ä»¶
+     * 判断是否为文本文件
      */
     private boolean isTextFile(String extension) {
         String[] textExtensions = {
@@ -364,7 +364,7 @@ public class DocumentService {
     }
     
     /**
-     * ä»Ž MinIO æµå¼è¯»å–æ–‡ä»¶ï¼Œä¾› Controller ç›´æŽ¥å“åº”ç»™æµè§ˆå™¨ï¼ˆinline å±•ç¤ºï¼‰
+     * 从 MinIO 流式读取文件，供 Controller 直接响应给浏览器（inline 展示）
      */
     public InputStream streamFile(String fileName) throws Exception {
         String objectName = "merged/" + fileName;
@@ -376,10 +376,10 @@ public class DocumentService {
     }
 
     /**
-     * æ ¼å¼åŒ–æ–‡ä»¶å¤§å°
+     * 格式化文件大小
      */
     private String formatFileSize(Long size) {
-        if (size == null) return "æœªçŸ¥";
+        if (size == null) return "未知";
         
         if (size < 1024) {
             return size + " B";

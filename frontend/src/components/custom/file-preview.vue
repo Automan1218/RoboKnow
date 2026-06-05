@@ -179,7 +179,7 @@ function closePreview() {
 
 <style scoped lang="scss">
 .file-preview-container {
-  @apply h-full flex flex-col bg-white;
+  @apply h-full flex flex-col bg-white text-gray-900;
 
   .preview-header {
     @apply flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50 shrink-0;
@@ -197,7 +197,7 @@ function closePreview() {
     }
 
     .preview-text {
-      @apply text-sm font-mono whitespace-pre-wrap break-words;
+      @apply text-sm font-mono whitespace-pre-wrap break-words text-gray-900;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       line-height: 1.5;
       margin: 0;
