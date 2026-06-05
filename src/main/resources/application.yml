@@ -71,7 +71,8 @@ admin:
 
 file:
   parsing:
-    chunk-size: 512 # 每个文本块的最大字符数
+    chunk-size: 1024 # 每个文本块的最大字符数
+    chunk-overlap-ratio: 0.1 # 相邻文本块重叠比例
     buffer-size: 8192    # 8KB 缓冲区
     max-memory-threshold: 0.8  # 80% 内存阈值
 
@@ -88,7 +89,7 @@ logging:
     org.springframework.web: DEBUG
     org.springframework.boot.autoconfigure.web.servlet: DEBUG
     org.springframework.security: DEBUG
-    com.yizhaoqi.smartpai.service: DEBUG
+    com.yizhaoqi.roboknow.service: DEBUG
     io.minio: DEBUG
 
 log4j:

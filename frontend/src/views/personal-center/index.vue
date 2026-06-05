@@ -47,9 +47,9 @@ const setPrimaryOrg = async () => {
 </script>
 
 <template>
+  <div class="flex-cc h-full">
   <NSpin :show="loading">
-    <div class="flex-cc">
-      <NCard class="min-h-400px min-w-600px w-50vw card-wrapper" :segmented="{ content: true, footer: 'soft' }">
+    <NCard class="min-h-400px min-w-600px w-50vw card-wrapper" :segmented="{ content: true, footer: 'soft' }">
         <template #header>
           <div class="flex items-center gap-4">
             <NAvatar size="large">
@@ -98,13 +98,12 @@ const setPrimaryOrg = async () => {
         @positive-click="setPrimaryOrg"
         @negative-click="visible = false"
       />
-    </div>
   </NSpin>
+  </div>
 </template>
 
 <style scoped lang="scss">
 :deep(.n-card__content) {
-  flex: none m !important;
   height: fit-content;
 }
 </style>

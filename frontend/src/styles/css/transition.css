@@ -80,3 +80,20 @@
   opacity: 0;
   transform: scale(0);
 }
+
+/*
+  Without `mode="out-in"` the leaving and entering pages are both in normal flow
+  during the transition, so the entering page gets pushed below the leaving one
+  (appears from mid-screen, then snaps to the top after 0.3s). Taking the leaving
+  page out of flow lets the entering page occupy the full content area immediately.
+  Requires the content <main> to be `position: relative` (see base-layout).
+*/
+.fade-leave-active,
+.fade-slide-leave-active,
+.fade-bottom-leave-active,
+.fade-scale-leave-active,
+.zoom-fade-leave-active,
+.zoom-out-leave-active {
+  position: absolute;
+  width: 100%;
+}

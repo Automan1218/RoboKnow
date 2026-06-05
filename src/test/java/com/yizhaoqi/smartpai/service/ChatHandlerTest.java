@@ -1,6 +1,6 @@
-package com.yizhaoqi.smartpai.service;
+package com.yizhaoqi.roboknow.service;
 
-import com.yizhaoqi.smartpai.agent.ReactAgentService;
+import com.yizhaoqi.roboknow.agent.ReactAgentService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.socket.TextMessage;

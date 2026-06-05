@@ -1,7 +1,7 @@
-package com.yizhaoqi.smartpai.utils;
+package com.yizhaoqi.roboknow.utils;
 
-import com.yizhaoqi.smartpai.model.User;
-import com.yizhaoqi.smartpai.repository.UserRepository;
+import com.yizhaoqi.roboknow.model.User;
+import com.yizhaoqi.roboknow.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

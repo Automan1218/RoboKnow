@@ -8,9 +8,9 @@ import json5 from 'json5';
 export function createServiceConfig(env: Env.ImportMeta) {
   const { VITE_SERVICE_BASE_URL, VITE_OTHER_SERVICE_BASE_URL } = env;
 
-  let other = {} as Record<App.Service.OtherBaseURLKey, string>;
+  let rawOther = {} as Record<App.Service.OtherBaseURLKey, ServiceBaseURLValue>;
   try {
-    other = json5.parse(VITE_OTHER_SERVICE_BASE_URL);
+    rawOther = json5.parse(VITE_OTHER_SERVICE_BASE_URL);
   } catch {
     // eslint-disable-next-line no-console
     console.error('VITE_OTHER_SERVICE_BASE_URL is not a valid json5 string');
@@ -18,7 +18,7 @@ export function createServiceConfig(env: Env.ImportMeta) {
 
   const httpConfig: App.Service.SimpleServiceConfig = {
     baseURL: VITE_SERVICE_BASE_URL,
-    other
+    other: normalizeOtherBaseURLs(rawOther)
   };
 
   const otherHttpKeys = Object.keys(httpConfig.other) as App.Service.OtherBaseURLKey[];
@@ -26,7 +26,7 @@ export function createServiceConfig(env: Env.ImportMeta) {
   const otherConfig: App.Service.OtherServiceConfigItem[] = otherHttpKeys.map(key => {
     return {
       key,
-      baseURL: httpConfig.other[key],
+      baseURL: normalizeBaseURL(httpConfig.other[key]),
       proxyPattern: createProxyPattern(key)
     };
   });
@@ -72,4 +72,24 @@ function createProxyPattern(key?: App.Service.OtherBaseURLKey) {
   }
 
   return `/proxy-${key}`;
+}
+
+type ServiceBaseURLValue = string | { target?: string; baseURL?: string; url?: string };
+
+function normalizeOtherBaseURLs(other: Record<App.Service.OtherBaseURLKey, ServiceBaseURLValue>) {
+  const normalized = {} as Record<App.Service.OtherBaseURLKey, string>;
+
+  for (const key of Object.keys(other) as App.Service.OtherBaseURLKey[]) {
+    normalized[key] = normalizeBaseURL(other[key]);
+  }
+
+  return normalized;
+}
+
+function normalizeBaseURL(value: ServiceBaseURLValue) {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return value.target || value.baseURL || value.url || '';
 }

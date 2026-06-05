@@ -6,8 +6,8 @@ defineOptions({
 
 <template>
   <DarkModeContainer class="h-full flex-center">
-    <a href="https://github.com/itwanger/PaiSmart.git" target="_blank" rel="noopener noreferrer">
-      Copyright MIT © 2025 PaiSmart
+    <a href="https://github.com/itwanger/RoboKnow.git" target="_blank" rel="noopener noreferrer">
+      Copyright MIT © 2025 RoboKnow
     </a>
   </DarkModeContainer>
 </template>

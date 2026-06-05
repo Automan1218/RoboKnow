@@ -1,9 +1,9 @@
-package com.yizhaoqi.smartpai.service;
+package com.yizhaoqi.roboknow.service;
 
-import com.yizhaoqi.smartpai.exception.CustomException;
-import com.yizhaoqi.smartpai.model.User;
-import com.yizhaoqi.smartpai.repository.UserRepository;
-import com.yizhaoqi.smartpai.utils.PasswordUtil;
+import com.yizhaoqi.roboknow.exception.CustomException;
+import com.yizhaoqi.roboknow.model.User;
+import com.yizhaoqi.roboknow.repository.UserRepository;
+import com.yizhaoqi.roboknow.utils.PasswordUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

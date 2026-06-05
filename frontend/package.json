@@ -2,9 +2,9 @@
   "name": "pi-smart",
   "type": "module",
   "version": "1.3.13",
-  "description": "PaiSmart",
+  "description": "RoboKnow",
   "author": {
-    "name": "PaiSmart",
+    "name": "RoboKnow",
     "url": "https://github.com/itwanger/PaiSmart.git"
   },
   "license": "MIT",
@@ -13,7 +13,7 @@
     "url": "https://github.com/itwanger/PaiSmart.git"
   },
   "bugs": {
-    "url": "https://github.com/itwanger/PaiSmart/issues"
+    "url": "https://github.com/itwanger/RoboKnow/issues"
   },
   "keywords": [
     "ai",

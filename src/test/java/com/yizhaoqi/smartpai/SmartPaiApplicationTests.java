@@ -1,4 +1,4 @@
-package com.yizhaoqi.smartpai;
+package com.yizhaoqi.roboknow;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

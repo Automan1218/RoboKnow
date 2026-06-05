@@ -145,4 +145,11 @@ function getSiderCollapsedWidth() {
 #__SCROLL_EL_ID__ {
   @include scrollbar();
 }
+
+// Positioning context for the page-leave transition, which takes the leaving
+// page out of flow (position: absolute) to avoid the entering page being pushed
+// down during navigation. See styles/css/transition.css.
+main {
+  position: relative;
+}
 </style>

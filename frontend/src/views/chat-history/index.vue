@@ -56,7 +56,7 @@ async function getList() {
 </script>
 
 <template>
-  <div class="h-full">
+  <div class="flex flex-col overflow-hidden" style="height:100%">
     <Teleport defer to="#header-extra">
       <div class="px-10">
         <NForm :model="params" label-placement="left" :show-feedback="false" inline>
@@ -78,14 +78,29 @@ async function getList() {
         </NForm>
       </div>
     </Teleport>
-    <NScrollbar ref="scrollbarRef">
-      <NSpin :show="loading" class="h-full">
-        <VueMarkdownItProvider>
-          <ChatMessage v-for="(item, index) in list" :key="index" :msg="item" />
-        </VueMarkdownItProvider>
-        <NEmpty v-if="!list.length" description="No data" class="mt-60" />
+
+    <div class="flex-1 overflow-y-auto">
+      <NSpin :show="loading">
+        <!-- Empty state -->
+        <div v-if="!loading && !list.length" class="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+          <icon-solar:chat-round-dots-linear class="text-6xl text-gray-400" />
+          <p class="text-gray-400">No conversation history found for the selected date range.</p>
+        </div>
+
+        <div v-else class="mx-auto w-full max-w-3xl px-4 py-6">
+          <Suspense>
+            <VueMarkdownItProvider>
+              <ChatMessage v-for="(item, index) in list" :key="index" :msg="item" />
+            </VueMarkdownItProvider>
+            <template #fallback>
+              <div>
+                <ChatMessage v-for="(item, index) in list" :key="index" :msg="item" />
+              </div>
+            </template>
+          </Suspense>
+        </div>
       </NSpin>
-    </NScrollbar>
+    </div>
   </div>
 </template>
 
