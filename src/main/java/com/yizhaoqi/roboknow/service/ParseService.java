@@ -235,18 +235,30 @@ public class ParseService {
     }
 
     /**
-     * 用 BreakIterator 提取句子列表，自动适配英文/中文语言边界。
-     * 对无明确句点的简历 bullet 行，BreakIterator 会在换行处断句。
+     * 提取句子列表：先用 BreakIterator.getSentenceInstance 识别标点句子边界；
+     * 若整段文本没有句子边界（如 PDF bullet 列表无句号），则按 \n 切行，
+     * 确保每行独立成段，避免整篇文档降级到词切割。
      */
     private List<String> extractSentences(String text) {
         List<String> result = new ArrayList<>();
         BreakIterator bi = BreakIterator.getSentenceInstance(java.util.Locale.ROOT);
         bi.setText(text);
         int start = bi.first();
+        int segmentCount = 0;
         for (int end = bi.next(); end != BreakIterator.DONE; start = end, end = bi.next()) {
             String sentence = text.substring(start, end);
             if (!sentence.isBlank()) {
                 result.add(sentence);
+                segmentCount++;
+            }
+        }
+        // BreakIterator 未找到句子边界（只切出 1 段且含换行）→ 按行切分
+        if (segmentCount <= 1 && text.contains("\n")) {
+            result.clear();
+            for (String line : text.split("\n")) {
+                if (!line.isBlank()) {
+                    result.add(line.trim());
+                }
             }
         }
         return result;
