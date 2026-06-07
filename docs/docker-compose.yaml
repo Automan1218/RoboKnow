@@ -151,6 +151,21 @@ services:
       retries: 3
 
 
+  ocr-service:
+    build:
+      context: ../ocr_service
+      dockerfile: Dockerfile
+    container_name: ocr-service
+    restart: always
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 volumes:
   redis-data:
   mysql-data:

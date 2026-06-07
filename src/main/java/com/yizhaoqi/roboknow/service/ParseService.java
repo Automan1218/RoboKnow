@@ -2,22 +2,32 @@ package com.yizhaoqi.roboknow.service;
 
 import com.yizhaoqi.roboknow.model.DocumentVector;
 import com.yizhaoqi.roboknow.repository.DocumentVectorRepository;
+import jakarta.annotation.PostConstruct;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
-import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.AutoDetectParser;
+import org.apache.tika.parser.ParseContext;
 import org.apache.tika.sax.BodyContentHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
 import java.io.*;
+import java.text.BreakIterator;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.text.BreakIterator;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ParseService {
@@ -36,151 +46,190 @@ public class ParseService {
     @Value("${file.parsing.chunk-overlap-size:0}")
     private int chunkOverlapSize;
 
-    @Value("${file.parsing.parent-chunk-size:1048576}")
-    private int parentChunkSize;
-    
-    @Value("${file.parsing.buffer-size:8192}")
-    private int bufferSize;
-    
     @Value("${file.parsing.max-memory-threshold:0.8}")
     private double maxMemoryThreshold;
-    
-    public ParseService() {
+
+    @Value("${ocr.api.url:http://localhost:8000}")
+    private String ocrApiUrl;
+
+    @Value("${ocr.api.min-text-length:100}")
+    private int ocrMinTextLength;
+
+    @Value("${ocr.api.timeout-seconds:120}")
+    private int ocrTimeoutSeconds;
+
+    private WebClient ocrWebClient;
+
+    @PostConstruct
+    public void initOcrClient() {
+        this.ocrWebClient = WebClient.builder()
+            .baseUrl(ocrApiUrl)
+            .codecs(c -> c.defaultCodecs().maxInMemorySize(50 * 1024 * 1024))
+            .build();
     }
 
+    public ParseService() {}
+
+    // ─────────────────────────────────────────────────────────
+    // Public API
+    // ─────────────────────────────────────────────────────────
+
     /**
-     * 以流式方式解析文件，将内容分块并保存到数据库，以避免OOM。
-     * 采用"父文档-子切片"策略。
-     *
-     * @param fileMd5    文件的MD5哈希值，用于唯一标识文件
-     * @param fileStream 文件输入流，用于读取文件内容
-     * @param userId     上传用户ID
-     * @param orgTag     组织标签
-     * @param isPublic   是否公开
-     * @throws IOException   如果文件读取过程中发生错误
-     * @throws TikaException 如果文件解析过程中发生错误
+     * Parse file and save chunks.
+     * PDF: Tika first → if too little text (image PDF) → PaddleOCR fallback.
+     * Other formats: Tika only.
      */
     public void parseAndSave(String fileMd5, InputStream fileStream,
             String userId, String orgTag, boolean isPublic) throws IOException, TikaException {
-        logger.info("开始流式解析文件，fileMd5: {}, userId: {}, orgTag: {}, isPublic: {}",
+        logger.info("开始解析文件，fileMd5: {}, userId: {}, orgTag: {}, isPublic: {}",
                 fileMd5, userId, orgTag, isPublic);
-        
+
         checkMemoryThreshold();
 
-        try (BufferedInputStream bufferedStream = new BufferedInputStream(fileStream, bufferSize)) {
-            // 创建一个流式处理器，它会在内部处理父块的切分和子块的保存
-            StreamingContentHandler handler = new StreamingContentHandler(fileMd5, userId, orgTag, isPublic);
+        byte[] fileBytes = fileStream.readAllBytes();
+        String text = extractText(fileBytes, fileMd5);
+
+        if (text == null || text.isBlank()) {
+            logger.warn("文件内容为空，跳过处理: fileMd5={}", fileMd5);
+            return;
+        }
+
+        List<String> chunks = splitTextIntoChunksWithSemantics(text, chunkSize);
+        saveChildChunks(fileMd5, chunks, userId, orgTag, isPublic, 0);
+        logger.info("文件解析完成，fileMd5: {}, 共 {} 个chunks", fileMd5, chunks.size());
+    }
+
+    /** Backward-compatible overload */
+    public void parseAndSave(String fileMd5, InputStream fileStream) throws IOException, TikaException {
+        parseAndSave(fileMd5, fileStream, "unknown", "DEFAULT", false);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Text extraction
+    // ─────────────────────────────────────────────────────────
+
+    private String extractText(byte[] fileBytes, String fileMd5) {
+        String tikaText = extractWithTika(fileBytes, fileMd5);
+
+        if (tikaText.trim().length() < ocrMinTextLength && isPdf(fileBytes)) {
+            logger.info("Tika提取文字不足({} chars)，尝试PaddleOCR: fileMd5={}", tikaText.trim().length(), fileMd5);
+            String ocrText = callPaddleOcr(fileBytes, fileMd5);
+            if (ocrText != null && !ocrText.isBlank()) {
+                logger.info("PaddleOCR提取成功: {} chars", ocrText.length());
+                return ocrText;
+            }
+            logger.warn("PaddleOCR失败，使用Tika结果: fileMd5={}", fileMd5);
+        }
+
+        return tikaText;
+    }
+
+    private String extractWithTika(byte[] fileBytes, String fileMd5) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            StructureAwareContentHandler handler = new StructureAwareContentHandler(sb);
             Metadata metadata = new Metadata();
             ParseContext context = new ParseContext();
             AutoDetectParser parser = new AutoDetectParser();
 
-            // Tika的parse方法会驱动整个流式处理过程
-            // 当handler的characters方法接收到足够数据时，会触发分块、切片和保存
-            parser.parse(bufferedStream, handler, metadata, context);
+            try (InputStream is = new ByteArrayInputStream(fileBytes)) {
+                parser.parse(is, handler, metadata, context);
+            }
 
-            logger.info("文件流式解析和入库完成，fileMd5: {}", fileMd5);
-
+            logger.debug("Tika提取文字: {} chars, fileMd5={}", sb.length(), fileMd5);
+            return sb.toString();
         } catch (SAXException e) {
-            logger.error("文档解析失败，fileMd5: {}", fileMd5, e);
-            throw new RuntimeException("文档解析失败", e);
+            logger.error("Tika SAX解析失败: fileMd5={}", fileMd5, e);
+            return "";
+        } catch (Exception e) {
+            logger.error("Tika解析失败: fileMd5={}", fileMd5, e);
+            return "";
         }
     }
 
-    /**
-     * 兼容旧版本的解析方法
-     */
-    public void parseAndSave(String fileMd5, InputStream fileStream) throws IOException, TikaException {
-        // 使用默认值调用新方法
-        parseAndSave(fileMd5, fileStream, "unknown", "DEFAULT", false);
+    private boolean isPdf(byte[] fileBytes) {
+        // PDF magic bytes: %PDF
+        return fileBytes.length >= 4
+            && fileBytes[0] == 0x25  // %
+            && fileBytes[1] == 0x50  // P
+            && fileBytes[2] == 0x44  // D
+            && fileBytes[3] == 0x46; // F
     }
 
-    private void checkMemoryThreshold() {
-        Runtime runtime = Runtime.getRuntime();
-        long maxMemory = runtime.maxMemory();
-        long totalMemory = runtime.totalMemory();
-        long freeMemory = runtime.freeMemory();
-        long usedMemory = totalMemory - freeMemory;
-        
-        double memoryUsage = (double) usedMemory / maxMemory;
-        
-        if (memoryUsage > maxMemoryThreshold) {
-            logger.warn("内存使用率过高: {:.2f}%, 触发垃圾回收", memoryUsage * 100);
-            System.gc();
-            
-            // 重新检查
-            usedMemory = runtime.totalMemory() - runtime.freeMemory();
-            memoryUsage = (double) usedMemory / maxMemory;
-            
-            if (memoryUsage > maxMemoryThreshold) {
-                throw new RuntimeException("内存不足，无法处理大文件。当前使用率: " + 
-                    String.format("%.2f%%", memoryUsage * 100));
+    private String callPaddleOcr(byte[] fileBytes, String fileMd5) {
+        try {
+            MultipartBodyBuilder builder = new MultipartBodyBuilder();
+            builder.part("file", new ByteArrayResource(fileBytes) {
+                @Override
+                public String getFilename() { return "document.pdf"; }
+            }).contentType(MediaType.APPLICATION_PDF);
+
+            Map<?, ?> response = ocrWebClient.post()
+                .uri("/ocr")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(builder.build()))
+                .retrieve()
+                .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(ocrTimeoutSeconds))
+                .block();
+
+            if (response != null && response.get("text") instanceof String text) {
+                return text;
             }
+            return "";
+        } catch (Exception e) {
+            logger.error("PaddleOCR调用失败: fileMd5={}", fileMd5, e);
+            return "";
         }
     }
-    
-    /**
-     * 内部流式内容处理器，实现了父子文档切分策略的核心逻辑。
-     * Tika解析器会调用characters方法，当累积的文本达到"父块"大小时，
-     * 就触发processParentChunk方法，进行"子切片"的生成和入库。
-     */
-    private class StreamingContentHandler extends BodyContentHandler {
-        private final StringBuilder buffer = new StringBuilder();
-        private final String fileMd5;
-        private final String userId;
-        private final String orgTag;
-        private final boolean isPublic;
-        private int savedChunkCount = 0;
 
-        public StreamingContentHandler(String fileMd5, String userId, String orgTag, boolean isPublic) {
-            super(-1); // 禁用Tika的内部写入限制，我们自己管理缓冲区
-            this.fileMd5 = fileMd5;
-            this.userId = userId;
-            this.orgTag = orgTag;
-            this.isPublic = isPublic;
+    // ─────────────────────────────────────────────────────────
+    // Structure-aware Tika content handler
+    // Inserts \n on block-level elements so extractSentences()
+    // can split on \n even when there is no sentence punctuation.
+    // ─────────────────────────────────────────────────────────
+
+    private static final Set<String> BLOCK_ELEMENTS = Set.of(
+        "p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6",
+        "li", "td", "tr", "th", "section", "article", "header", "footer"
+    );
+
+    private static class StructureAwareContentHandler extends BodyContentHandler {
+        private final StringBuilder target;
+
+        StructureAwareContentHandler(StringBuilder target) {
+            super(-1); // unlimited internal buffer
+            this.target = target;
         }
 
         @Override
-        public void characters(char[] ch, int start, int length) {
-            buffer.append(ch, start, length);
-            if (buffer.length() >= parentChunkSize) {
-                processParentChunk();
+        public void startElement(String uri, String localName, String qName, Attributes atts)
+                throws SAXException {
+            if (BLOCK_ELEMENTS.contains(localName.toLowerCase())) {
+                target.append("\n");
             }
+            super.startElement(uri, localName, qName, atts);
         }
 
         @Override
-        public void endDocument() {
-            // 处理文档末尾剩余的最后一部分内容
-            if (buffer.length() > 0) {
-                processParentChunk();
+        public void endElement(String uri, String localName, String qName) throws SAXException {
+            if (BLOCK_ELEMENTS.contains(localName.toLowerCase())) {
+                target.append("\n");
             }
+            super.endElement(uri, localName, qName);
         }
 
-        private void processParentChunk() {
-            String parentChunkText = buffer.toString();
-            logger.debug("处理父文本块，大小: {} bytes", parentChunkText.length());
-
-            // 1. 将父块分割成更小的、有语义的子切片
-            List<String> childChunks = ParseService.this.splitTextIntoChunksWithSemantics(parentChunkText, chunkSize);
-
-            // 2. 将子切片批量保存到数据库
-            this.savedChunkCount = ParseService.this.saveChildChunks(fileMd5, childChunks, userId, orgTag, isPublic, this.savedChunkCount);
-
-            // 3. 清空缓冲区，为下一个父块做准备
-            buffer.setLength(0);
+        @Override
+        public void characters(char[] ch, int start, int length) throws SAXException {
+            target.append(ch, start, length);
+            super.characters(ch, start, length);
         }
     }
 
-    /**
-     * 将子切片列表保存到数据库。
-     *
-     * @param fileMd5         文件的 MD5 哈希值
-     * @param chunks          子切片文本列表
-     * @param userId          上传用户ID
-     * @param orgTag          组织标签
-     * @param isPublic        是否公开
-     * @param startingChunkId 当前批次的起始分片ID
-     * @return 保存后总的分片数量
-     */
+    // ─────────────────────────────────────────────────────────
+    // Chunk persistence
+    // ─────────────────────────────────────────────────────────
+
     private int saveChildChunks(String fileMd5, List<String> chunks,
             String userId, String orgTag, boolean isPublic, int startingChunkId) {
         int currentChunkId = startingChunkId;
@@ -199,10 +248,10 @@ public class ParseService {
         return currentChunkId;
     }
 
-    /**
-     * 语义分割：用 BreakIterator.getSentenceInstance 切句，再按 chunkSize 滑动聚合。
-     * 不依赖换行结构，对 PDF/Word 解析后的英文和中文文本均有效。
-     */
+    // ─────────────────────────────────────────────────────────
+    // Semantic chunking
+    // ─────────────────────────────────────────────────────────
+
     private List<String> splitTextIntoChunksWithSemantics(String text, int chunkSize) {
         List<String> sentences = extractSentences(text);
         if (sentences.isEmpty()) return List.of();
@@ -211,7 +260,6 @@ public class ParseService {
         StringBuilder current = new StringBuilder();
 
         for (String sentence : sentences) {
-            // 单句超过 chunkSize：直接切词后加入
             if (sentence.length() > chunkSize) {
                 if (!current.isEmpty()) {
                     chunks.add(current.toString().trim());
@@ -220,7 +268,6 @@ public class ParseService {
                 chunks.addAll(splitLongSentence(sentence, chunkSize));
                 continue;
             }
-            // 加入本句会超限：先提交当前块，再开新块
             if (current.length() + sentence.length() > chunkSize && !current.isEmpty()) {
                 chunks.add(current.toString().trim());
                 current = new StringBuilder();
@@ -235,9 +282,10 @@ public class ParseService {
     }
 
     /**
-     * 提取句子列表：先用 BreakIterator.getSentenceInstance 识别标点句子边界；
-     * 若整段文本没有句子边界（如 PDF bullet 列表无句号），则按 \n 切行，
-     * 确保每行独立成段，避免整篇文档降级到词切割。
+     * Extract sentences.
+     * 1. Try BreakIterator (sentence punctuation).
+     * 2. If ≤1 segment and text has \n → split by line (handles structured docs
+     *    like resumes where Tika / OCR preserves line breaks but not punctuation).
      */
     private List<String> extractSentences(String text) {
         List<String> result = new ArrayList<>();
@@ -252,7 +300,6 @@ public class ParseService {
                 segmentCount++;
             }
         }
-        // BreakIterator 未找到句子边界（只切出 1 段且含换行）→ 按行切分
         if (segmentCount <= 1 && text.contains("\n")) {
             result.clear();
             for (String line : text.split("\n")) {
@@ -265,14 +312,10 @@ public class ParseService {
     }
 
     private List<String> applySemanticOverlap(List<String> chunks, int chunkSize) {
-        if (chunks.size() <= 1) {
-            return chunks;
-        }
+        if (chunks.size() <= 1) return chunks;
 
         int overlapLimit = resolveOverlapLimit(chunkSize);
-        if (overlapLimit <= 0) {
-            return chunks;
-        }
+        if (overlapLimit <= 0) return chunks;
 
         List<String> overlapped = new ArrayList<>();
         overlapped.add(chunks.get(0));
@@ -291,34 +334,22 @@ public class ParseService {
     }
 
     private int resolveOverlapLimit(int chunkSize) {
-        if (chunkOverlapSize > 0) {
-            return chunkOverlapSize;
-        }
+        if (chunkOverlapSize > 0) return chunkOverlapSize;
         return (int) Math.round(chunkSize * chunkOverlapRatio);
     }
 
     private String extractSemanticTail(String text, int overlapLimit) {
-        if (text == null || text.isBlank()) {
-            return "";
-        }
+        if (text == null || text.isBlank()) return "";
 
         String trimmed = text.trim();
         String[] paragraphs = trimmed.split("\n\n+");
         for (int i = paragraphs.length - 1; i >= 0; i--) {
             String paragraph = paragraphs[i].trim();
-            if (paragraph.isEmpty()) {
-                continue;
-            }
-            if (paragraph.length() <= overlapLimit) {
-                return paragraph;
-            }
-
+            if (paragraph.isEmpty()) continue;
+            if (paragraph.length() <= overlapLimit) return paragraph;
             String sentence = extractTailSentence(paragraph, overlapLimit);
-            if (!sentence.isBlank()) {
-                return sentence;
-            }
+            if (!sentence.isBlank()) return sentence;
         }
-
         return "";
     }
 
@@ -326,13 +357,10 @@ public class ParseService {
         String[] sentences = paragraph.split("(?<=[。！？；])|(?<=[.!?;])\\s+");
         for (int i = sentences.length - 1; i >= 0; i--) {
             String sentence = sentences[i].trim();
-            if (!sentence.isEmpty() && sentence.length() <= overlapLimit) {
-                return sentence;
-            }
+            if (!sentence.isEmpty() && sentence.length() <= overlapLimit) return sentence;
         }
         return "";
     }
-
 
     private List<String> splitLongSentence(String sentence, int chunkSize) {
         List<String> chunks = new ArrayList<>();
@@ -349,37 +377,31 @@ public class ParseService {
             }
             currentChunk.append(word);
         }
+        if (!currentChunk.isEmpty()) chunks.add(currentChunk.toString());
 
-        if (!currentChunk.isEmpty()) {
-            chunks.add(currentChunk.toString());
-        }
-
-        logger.debug("BreakIterator分词成功，原文长度: {}, 分块数: {}", sentence.length(), chunks.size());
+        logger.debug("BreakIterator分词: 原文 {} chars, 分块 {}", sentence.length(), chunks.size());
         return chunks;
     }
-    
-    /**
-     * 备用方案：按字符分割
-     */
-    private List<String> splitByCharacters(String sentence, int chunkSize) {
-        List<String> chunks = new ArrayList<>();
-        StringBuilder currentChunk = new StringBuilder();
 
-        for (int i = 0; i < sentence.length(); i++) {
-            char c = sentence.charAt(i);
+    // ─────────────────────────────────────────────────────────
+    // Memory guard
+    // ─────────────────────────────────────────────────────────
 
-            if (currentChunk.length() + 1 > chunkSize && !currentChunk.isEmpty()) {
-                chunks.add(currentChunk.toString());
-                currentChunk = new StringBuilder();
+    private void checkMemoryThreshold() {
+        Runtime runtime = Runtime.getRuntime();
+        long maxMemory = runtime.maxMemory();
+        long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+        double memoryUsage = (double) usedMemory / maxMemory;
+
+        if (memoryUsage > maxMemoryThreshold) {
+            logger.warn("内存使用率过高: {:.2f}%, 触发GC", memoryUsage * 100);
+            System.gc();
+            usedMemory = runtime.totalMemory() - runtime.freeMemory();
+            memoryUsage = (double) usedMemory / maxMemory;
+            if (memoryUsage > maxMemoryThreshold) {
+                throw new RuntimeException("内存不足，无法处理文件。当前使用率: "
+                    + String.format("%.2f%%", memoryUsage * 100));
             }
-
-            currentChunk.append(c);
         }
-
-        if (!currentChunk.isEmpty()) {
-            chunks.add(currentChunk.toString());
-        }
-
-        return chunks;
     }
 }

@@ -69,6 +69,12 @@ admin:
   primary-org: default
   org-tags: default,admin
 
+ocr:
+  api:
+    url: http://localhost:8000   # PaddleOCR microservice
+    min-text-length: 100         # chars below which PDF is treated as image-based
+    timeout-seconds: 120         # max wait per document
+
 file:
   parsing:
     chunk-size: 1024 # 每个文本块的最大字符数
@@ -102,12 +108,12 @@ openai:
   api:
     url: https://api.openai.com/v1
     model: gpt-4o-mini
-    key: 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
+    key: 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
 
 embedding:
   api:
     url: https://api.openai.com/v1
-    key: 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
+    key: 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
     model: text-embedding-3-large
     batch-size: 100  # OpenAI 单请求可放大（DashScope 旧限制为 10）
     dimension: 2048  # 3-large 降维到 2048，对齐 ES dense_vector dims
