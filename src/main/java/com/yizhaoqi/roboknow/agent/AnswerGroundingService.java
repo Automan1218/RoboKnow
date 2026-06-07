@@ -30,6 +30,9 @@ public class AnswerGroundingService {
 
     private String groundAnswerInternal(String question, String draftAnswer, List<String> observations, AiUsageMetadata usageMetadata) {
         if (!hasRetrievedEvidence(observations)) {
+            // No knowledge-base evidence was retrieved — never expose LLM's own knowledge or
+            // hallucinations as if they came from the knowledge base. Always return the sentinel
+            // so the caller knows the knowledge base had no relevant content.
             return NO_EVIDENCE_ANSWER;
         }
 

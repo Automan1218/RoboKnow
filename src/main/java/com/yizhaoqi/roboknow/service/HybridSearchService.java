@@ -62,7 +62,7 @@ public class HybridSearchService {
      */
     public List<SearchResult> searchWithPermission(String query, String userId, int topK) {
         logger.debug("开始带权限搜索，查询: {}, 用户ID: {}", query, userId);
-        
+
         try {
             // 获取用户有效的组织标签（包含层级关系）
             List<String> userEffectiveTags = getUserEffectiveOrgTags(userId);
@@ -83,39 +83,24 @@ public class HybridSearchService {
 
             logger.debug("向量生成成功，开始执行混合搜索 KNN");
 
+            // 构建权限过滤查询（复用于 KNN filter 和 query filter）
+            co.elastic.clients.elasticsearch._types.query_dsl.Query permissionFilter = buildPermissionFilter(userDbId, userEffectiveTags);
+
             SearchResponse<EsDocument> response = esClient.search(s -> {
                         s.index("knowledge_base");
-                        // KNN 召回
+                        // KNN 召回 — 必须附带权限过滤，否则 KNN 结果不受 query.filter 约束
                         int recallK = topK * 30; // KNN 召回窗口
                         s.knn(kn -> kn
                                 .field("vector")
                                 .queryVector(queryVector)
                                 .k(recallK)
                                 .numCandidates(recallK)
+                                .filter(permissionFilter)
                         );
                         // 必须命中关键词 + 权限过滤
                         s.query(q -> q.bool(b -> b
                                 .must(mst -> mst.match(m -> m.field("textContent").query(query)))
-                                .filter(f -> f.bool(bf -> bf
-                                        // 条件1: 用户可访问自己的文档
-                                        .should(s1 -> s1.term(t -> t.field("userId").value(userDbId)))
-                                        // 条件2: 公开文档
-                                        .should(s2 -> s2.term(t -> t.field("public").value(true)))
-                                        // 条件3: 组织标签
-                                        .should(s3 -> {
-                                            if (userEffectiveTags.isEmpty()) {
-                                                return s3.matchNone(mn -> mn);
-                                            } else if (userEffectiveTags.size() == 1) {
-                                                return s3.term(t -> t.field("orgTag").value(userEffectiveTags.get(0)));
-                                            } else {
-                                                return s3.bool(inner -> {
-                                                    userEffectiveTags.forEach(tag -> inner.should(sh2 -> sh2.term(t -> t.field("orgTag").value(tag))));
-                                                    return inner;
-                                                });
-                                            }
-                                        })
-                                ))
-                        ));
+                                .filter(permissionFilter)));
 
                         // 第二阶段 BM25 rescore
                         s.rescore(r -> r
@@ -451,6 +436,29 @@ public class HybridSearchService {
             logger.error("获取用户数据库ID失败: {}", e.getMessage(), e);
             throw new RuntimeException("获取用户数据库ID失败", e);
         }
+    }
+
+    /**
+     * 构建权限过滤 Query，同时用于 KNN filter 和 query.filter。
+     * 文档可见条件：用户自己的文档 OR 公开文档 OR 用户所属组织的文档。
+     */
+    private co.elastic.clients.elasticsearch._types.query_dsl.Query buildPermissionFilter(
+            String userDbId, List<String> userEffectiveTags) {
+        return co.elastic.clients.elasticsearch._types.query_dsl.Query.of(q -> q.bool(bf -> {
+            bf.should(s1 -> s1.term(t -> t.field("userId").value(userDbId)));
+            bf.should(s2 -> s2.term(t -> t.field("public").value(true)));
+            if (userEffectiveTags.isEmpty()) {
+                bf.should(s3 -> s3.matchNone(mn -> mn));
+            } else if (userEffectiveTags.size() == 1) {
+                bf.should(s3 -> s3.term(t -> t.field("orgTag").value(userEffectiveTags.get(0))));
+            } else {
+                bf.should(s3 -> s3.bool(inner -> {
+                    userEffectiveTags.forEach(tag -> inner.should(sh -> sh.term(t -> t.field("orgTag").value(tag))));
+                    return inner;
+                }));
+            }
+            return bf;
+        }));
     }
 
     private boolean isSearchResultAccessible(SearchResult result, String userDbId, List<String> userEffectiveTags) {
