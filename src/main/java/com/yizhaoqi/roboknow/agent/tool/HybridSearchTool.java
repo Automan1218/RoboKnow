@@ -41,14 +41,16 @@ public class HybridSearchTool implements AgentTool {
 
         for (int i = 0; i < results.size(); i++) {
             SearchResult result = results.get(i);
-            String snippet = truncate(result.getTextContent(), 1200);
+            String displayText = result.getContextText() != null
+                    ? truncate(result.getContextText(), 4000)
+                    : truncate(result.getTextContent(), 1200);
             String file = result.getFileName() != null ? result.getFileName() : result.getFileMd5();
             sb.append(String.format("[Source #%d] File: %s, Chunk: %s, Score: %.4f\n%s\n",
                 i + 1,
                 file,
                 result.getChunkId(),
                 result.getScore() == null ? 0.0 : result.getScore(),
-                snippet));
+                displayText));
         }
         return sb.toString();
     }
