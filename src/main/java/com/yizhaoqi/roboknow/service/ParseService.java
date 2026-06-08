@@ -46,6 +46,9 @@ public class ParseService {
     @Value("${file.parsing.chunk-overlap-size:0}")
     private int chunkOverlapSize;
 
+    @Value("${file.parsing.parent-chunk-size:0}")
+    private int parentChunkSize;
+
     @Value("${file.parsing.max-memory-threshold:0.8}")
     private double maxMemoryThreshold;
 
@@ -94,9 +97,17 @@ public class ParseService {
             return;
         }
 
-        List<String> chunks = splitTextIntoChunksWithSemantics(text, chunkSize);
-        saveChildChunks(fileMd5, chunks, userId, orgTag, isPublic, 0);
-        logger.info("文件解析完成，fileMd5: {}, 共 {} 个chunks", fileMd5, chunks.size());
+        int pSize = resolvedParentChunkSize();
+        List<String> parentTexts = splitTextIntoChunksWithSemantics(text, pSize);
+        List<Long> parentIds = saveParentChunks(fileMd5, parentTexts, userId, orgTag, isPublic);
+
+        int childIdx = 0;
+        for (int i = 0; i < parentTexts.size(); i++) {
+            List<String> children = splitTextIntoChunksWithSemantics(parentTexts.get(i), chunkSize);
+            childIdx = saveChildChunks(fileMd5, children, userId, orgTag, isPublic, childIdx, parentIds.get(i));
+        }
+
+        logger.info("文件解析完成，fileMd5: {}, 父切片: {}, 子切片总数: {}", fileMd5, parentTexts.size(), childIdx);
     }
 
     /** Backward-compatible overload */
@@ -230,8 +241,29 @@ public class ParseService {
     // Chunk persistence
     // ─────────────────────────────────────────────────────────
 
+    private List<Long> saveParentChunks(String fileMd5, List<String> parentTexts,
+            String userId, String orgTag, boolean isPublic) {
+        List<Long> ids = new ArrayList<>();
+        int parentChunkId = 0;
+        for (String text : parentTexts) {
+            parentChunkId++;
+            var vector = new DocumentVector();
+            vector.setFileMd5(fileMd5);
+            vector.setChunkId(parentChunkId);
+            vector.setTextContent(text);
+            vector.setUserId(userId);
+            vector.setOrgTag(orgTag);
+            vector.setPublic(isPublic);
+            vector.setParent(true);
+            vector.setParentChunkId(null);
+            ids.add(documentVectorRepository.save(vector).getVectorId());
+        }
+        logger.info("保存 {} 个父切片到数据库", parentTexts.size());
+        return ids;
+    }
+
     private int saveChildChunks(String fileMd5, List<String> chunks,
-            String userId, String orgTag, boolean isPublic, int startingChunkId) {
+            String userId, String orgTag, boolean isPublic, int startingChunkId, Long parentId) {
         int currentChunkId = startingChunkId;
         for (String chunk : chunks) {
             currentChunkId++;
@@ -242,9 +274,11 @@ public class ParseService {
             vector.setUserId(userId);
             vector.setOrgTag(orgTag);
             vector.setPublic(isPublic);
+            vector.setParent(false);
+            vector.setParentChunkId(parentId);
             documentVectorRepository.save(vector);
         }
-        logger.info("成功保存 {} 个子切片到数据库", chunks.size());
+        logger.info("保存 {} 个子切片到数据库", chunks.size());
         return currentChunkId;
     }
 
@@ -336,6 +370,10 @@ public class ParseService {
     private int resolveOverlapLimit(int chunkSize) {
         if (chunkOverlapSize > 0) return chunkOverlapSize;
         return (int) Math.round(chunkSize * chunkOverlapRatio);
+    }
+
+    private int resolvedParentChunkSize() {
+        return parentChunkSize > 0 ? parentChunkSize : chunkSize * 3;
     }
 
     private String extractSemanticTail(String text, int overlapLimit) {
