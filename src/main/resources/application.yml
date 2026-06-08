@@ -78,6 +78,7 @@ ocr:
 file:
   parsing:
     chunk-size: 1024 # 每个文本块的最大字符数
+    parent-chunk-size: 3072 # 父切片大小；0 = 自动取 chunk-size * 3
     chunk-overlap-ratio: 0.1 # 相邻文本块重叠比例
     buffer-size: 8192    # 8KB 缓冲区
     max-memory-threshold: 0.8  # 80% 内存阈值
