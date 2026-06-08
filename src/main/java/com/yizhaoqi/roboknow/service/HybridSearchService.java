@@ -5,8 +5,10 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.yizhaoqi.roboknow.client.EmbeddingClient;
 import com.yizhaoqi.roboknow.entity.EsDocument;
 import com.yizhaoqi.roboknow.entity.SearchResult;
+import com.yizhaoqi.roboknow.model.DocumentVector;
 import com.yizhaoqi.roboknow.model.User;
 import com.yizhaoqi.roboknow.exception.CustomException;
+import com.yizhaoqi.roboknow.repository.DocumentVectorRepository;
 import com.yizhaoqi.roboknow.repository.UserRepository;
 import com.yizhaoqi.roboknow.repository.FileUploadRepository;
 import com.yizhaoqi.roboknow.model.FileUpload;
@@ -49,6 +51,9 @@ public class HybridSearchService {
 
     @Autowired
     private FileUploadRepository fileUploadRepository;
+
+    @Autowired
+    private DocumentVectorRepository documentVectorRepository;
 
     /**
      * 使用文本匹配和向量相似度进行混合搜索，支持权限过滤
@@ -104,10 +109,10 @@ public class HybridSearchService {
             List<SearchResult> results = response.hits().hits().stream()
                     .map(hit -> {
                         assert hit.source() != null;
-                        logger.debug("搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}", 
-                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(), 
+                        logger.debug("搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}",
+                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(),
                             hit.source().getTextContent().substring(0, Math.min(50, hit.source().getTextContent().length())));
-                        return new SearchResult(
+                        SearchResult r = new SearchResult(
                                 hit.source().getFileMd5(),
                                 hit.source().getChunkId(),
                                 hit.source().getTextContent(),
@@ -116,12 +121,15 @@ public class HybridSearchService {
                                 hit.source().getOrgTag(),
                                 hit.source().isPublic()
                         );
+                        r.setParentChunkId(hit.source().getParentChunkId());
+                        return r;
                     })
                     .filter(result -> isSearchResultAccessible(result, userDbId, userEffectiveTags))
                     .toList();
 
             logger.debug("返回搜索结果数量: {}", results.size());
             attachFileNames(results);
+            fetchParentContexts(results);
             return results;
         } catch (Exception e) {
             logger.error("带权限的搜索失败", e);
@@ -209,10 +217,10 @@ public class HybridSearchService {
             List<SearchResult> results = response.hits().hits().stream()
                     .map(hit -> {
                         assert hit.source() != null;
-                        logger.debug("纯文本搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}", 
-                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(), 
+                        logger.debug("纯文本搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}",
+                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(),
                             hit.source().getTextContent().substring(0, Math.min(50, hit.source().getTextContent().length())));
-                        return new SearchResult(
+                        SearchResult r = new SearchResult(
                                 hit.source().getFileMd5(),
                                 hit.source().getChunkId(),
                                 hit.source().getTextContent(),
@@ -221,12 +229,15 @@ public class HybridSearchService {
                                 hit.source().getOrgTag(),
                                 hit.source().isPublic()
                         );
+                        r.setParentChunkId(hit.source().getParentChunkId());
+                        return r;
                     })
                     .filter(result -> isSearchResultAccessible(result, userDbId, userEffectiveTags))
                     .toList();
 
             logger.debug("返回纯文本搜索结果数量: {}", results.size());
             attachFileNames(results);
+            fetchParentContexts(results);
             return results;
         } catch (Exception e) {
             logger.error("纯文本搜索失败", e);
@@ -429,6 +440,26 @@ public class HybridSearchService {
         if (userEffectiveTags != null && result.getOrgTag() != null
                 && userEffectiveTags.contains(result.getOrgTag())) return true;
         return false;
+    }
+
+    private void fetchParentContexts(List<SearchResult> results) {
+        List<Long> parentIds = results.stream()
+                .map(SearchResult::getParentChunkId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        if (parentIds.isEmpty()) return;
+
+        Map<Long, String> parentTexts = documentVectorRepository.findAllById(parentIds)
+                .stream()
+                .collect(Collectors.toMap(DocumentVector::getVectorId, DocumentVector::getTextContent));
+
+        results.forEach(r -> {
+            if (r.getParentChunkId() != null) {
+                String ctx = parentTexts.get(r.getParentChunkId());
+                if (ctx != null) r.setContextText(ctx);
+            }
+        });
     }
 
     private void attachFileNames(List<SearchResult> results) {
