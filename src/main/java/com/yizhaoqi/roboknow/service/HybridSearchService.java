@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
 
 import java.util.Collections;
 import java.util.List;
@@ -81,45 +80,25 @@ public class HybridSearchService {
                 return textOnlySearchWithPermission(query, userDbId, userEffectiveTags, topK);
             }
 
-            logger.debug("向量生成成功，开始执行混合搜索 KNN");
+            logger.debug("向量生成成功，开始执行 ANN+RRF 混合搜索");
 
-            // 构建权限过滤查询（复用于 KNN filter 和 query filter）
+            // 构建权限过滤查询（复用于 ANN filter 和 query filter）
             co.elastic.clients.elasticsearch._types.query_dsl.Query permissionFilter = buildPermissionFilter(userDbId, userEffectiveTags);
 
             SearchResponse<EsDocument> response = esClient.search(s -> {
-                        s.index("knowledge_base");
-                        // KNN 召回 — 必须附带权限过滤，否则 KNN 结果不受 query.filter 约束
-                        int recallK = topK * 30; // KNN 召回窗口
-                        s.knn(kn -> kn
-                                .field("vector")
-                                .queryVector(queryVector)
-                                .k(recallK)
-                                .numCandidates(recallK)
-                                .filter(permissionFilter)
-                        );
-                        // 必须命中关键词 + 权限过滤
-                        s.query(q -> q.bool(b -> b
-                                .must(mst -> mst.match(m -> m.field("textContent").query(query)))
-                                .filter(permissionFilter)));
+                s.index("knowledge_base");
+                s.knn(ann -> ann
+                        .field("vector")
+                        .queryVector(queryVector)
+                        .k(topK)
+                        .numCandidates(Math.max(topK * 4, 50))
+                        .filter(permissionFilter)
+                );
+                s.size(topK);
+                return s;
+            }, EsDocument.class);
 
-                        // 第二阶段 BM25 rescore
-                        s.rescore(r -> r
-                                .windowSize(recallK)
-                                .query(rq -> rq
-                                        .queryWeight(0.2d)               // 保留部分 KNN 分
-                                        .rescoreQueryWeight(1.0d)        // BM25 主导
-                                        .query(rqq -> rqq.match(m -> m
-                                                .field("textContent")
-                                                .query(query)
-                                                .operator(Operator.And)
-                                        ))
-                                )
-                        );
-                        s.size(topK);
-                        return s;
-                    }, EsDocument.class);
-
-            logger.debug("Elasticsearch查询执行完成，命中数量: {}, 最大分数: {}", 
+            logger.debug("Elasticsearch查询执行完成，命中数量: {}, 最大分数: {}",
                 response.hits().total().value(), response.hits().maxScore());
 
             List<SearchResult> results = response.hits().hits().stream()
@@ -273,34 +252,16 @@ public class HybridSearchService {
             }
 
             SearchResponse<EsDocument> response = esClient.search(s -> {
-                        s.index("knowledge_base");
-                        int recallK = topK * 30;
-                        s.knn(kn -> kn
-                                .field("vector")
-                                .queryVector(queryVector)
-                                .k(recallK)
-                                .numCandidates(recallK)
-                        );
-
-                        // 过滤仅保留包含关键词的文本
-                        s.query(q -> q.match(m -> m.field("textContent").query(query)));
-
-                        // rescore BM25
-                        s.rescore(r -> r
-                                .windowSize(recallK)
-                                .query(rq -> rq
-                                        .queryWeight(0.2d)
-                                        .rescoreQueryWeight(1.0d)
-                                        .query(rqq -> rqq.match(m -> m
-                                                .field("textContent")
-                                                .query(query)
-                                                .operator(Operator.And)
-                                        ))
-                                )
-                        );
-                        s.size(topK);
-                        return s;
-                    }, EsDocument.class);
+                s.index("knowledge_base");
+                s.knn(ann -> ann
+                        .field("vector")
+                        .queryVector(queryVector)
+                        .k(topK)
+                        .numCandidates(Math.max(topK * 4, 50))
+                );
+                s.size(topK);
+                return s;
+            }, EsDocument.class);
 
             return response.hits().hits().stream()
                     .map(hit -> {
