@@ -32,13 +32,16 @@ export const useChatStore = defineStore(SetupStoreId.Chat, () => {
 
   const store = useAuthStore();
 
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${window.location.host}/proxy-ws/chat/${store.token}`;
+
   const {
     status: wsStatus,
     data: wsData,
     send: wsSend,
     open: wsOpen,
     close: wsClose
-  } = useWebSocket(`/proxy-ws/chat/${store.token}`, {
+  } = useWebSocket(wsUrl, {
     autoReconnect: true
   });
 
