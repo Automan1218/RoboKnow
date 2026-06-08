@@ -132,6 +132,21 @@ public class ReactAgentService {
             }
 
             if (step.isFinalAnswer) {
+                // Guard: never accept a Final Answer without at least one knowledge-base search.
+                // LLMs sometimes skip the tool call when conversation history already contains
+                // related content. Force a search on the raw user message and continue the loop.
+                if (observations.isEmpty()) {
+                    logger.warn("LLM skipped tool call and gave direct Final Answer — forcing hybrid_search");
+                    pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.ACTING, i + 1));
+                    pushEvent(ctx.getSession(), AgentEvent.action("hybrid_search", ctx.getUserMessage()));
+                    pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.OBSERVING, i + 1));
+                    String forcedObs = toolRegistry.execute("hybrid_search", ctx.getUserMessage(), ctx);
+                    observations.add(forcedObs);
+                    pushEvent(ctx.getSession(), AgentEvent.observation("hybrid_search", forcedObs));
+                    messages.add(Map.of("role", "assistant", "content", step.formatAssistantContent()));
+                    messages.add(Map.of("role", "user", "content", "Observation: " + forcedObs));
+                    continue; // re-enter loop so LLM can produce a grounded answer
+                }
                 finalAnswer = step.finalAnswer;
                 break;
             }
@@ -213,7 +228,7 @@ public class ReactAgentService {
                "- Use at most one tool per step.\n" +
                "- Always write Thought first, then Action or Final Answer.\n" +
                "- Tool results are returned as Observation: ...\n" +
-               "- For document-specific facts, search the knowledge base before answering.\n" +
+               "- MANDATORY: You MUST call hybrid_search at least once before giving any Final Answer. Never answer directly from conversation history or memory alone.\n" +
                "- Base the answer on retrieved knowledge-base content; do not fabricate information.\n" +
                "- Cite retrieved sources using the Source # markers from the observations.\n" +
                "- If searches find no relevant information, clearly say so in English.\n";

@@ -41,7 +41,7 @@ public class HybridSearchTool implements AgentTool {
 
         for (int i = 0; i < results.size(); i++) {
             SearchResult result = results.get(i);
-            String snippet = truncate(result.getTextContent(), 800);
+            String snippet = truncate(result.getTextContent(), 1200);
             String file = result.getFileName() != null ? result.getFileName() : result.getFileMd5();
             sb.append(String.format("[Source #%d] File: %s, Chunk: %s, Score: %.4f\n%s\n",
                 i + 1,

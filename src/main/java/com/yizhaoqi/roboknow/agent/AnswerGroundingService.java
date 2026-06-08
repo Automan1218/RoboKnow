@@ -42,9 +42,11 @@ public class AnswerGroundingService {
 
         List<Map<String, String>> messages = List.of(
             Map.of("role", "system", "content",
-                "You are a strict answer verifier for a RAG system. Rewrite the draft answer using only the retrieved evidence. "
-                    + "Keep only claims directly supported by the evidence. Preserve source citations such as "
-                    + "(Source #1: filename). If the evidence is insufficient, answer exactly: "
+                "You are a strict answer verifier for a RAG system. Rewrite the draft answer using ONLY facts explicitly stated in the retrieved evidence. "
+                    + "IMPORTANT: Do NOT treat claims made by the user in their question as verified facts. "
+                    + "If the user says 'I have X' or 'there should be Y', you must find X or Y in the retrieved evidence before including it. "
+                    + "If a claim is not in the retrieved evidence, omit it entirely — do not say 'the second X is not in evidence'. Just omit. "
+                    + "Preserve source citations such as (Source #1: filename). If the evidence is insufficient, answer exactly: "
                     + "No relevant information available. The retrieved evidence does not support an answer to this question."),
             Map.of("role", "user", "content",
                 "Question:\n" + question
