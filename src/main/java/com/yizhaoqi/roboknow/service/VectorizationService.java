@@ -57,12 +57,16 @@ public class VectorizationService {
             List<float[]> vectors = embeddingClient.embed(texts);
 
             // 构建 Elasticsearch 文档并存储
+            // 向量化的是子块内容（getContent），父块全文（parentContent）随文档一并存储，
+            // 供召回后回溯（small-to-big）喂给 LLM。
             List<EsDocument> esDocuments = IntStream.range(0, chunks.size())
                     .mapToObj(i -> new EsDocument(
                             UUID.randomUUID().toString(),
                             fileMd5,
                             chunks.get(i).getChunkId(),
                             chunks.get(i).getContent(),
+                            chunks.get(i).getParentChunkId(),
+                            chunks.get(i).getParentContent(),
                             vectors.get(i),
                             "openai-text-embedding-3-large", // 向量模型版本标记
                             userId,
@@ -91,11 +95,13 @@ public class VectorizationService {
         // 调用 Repository 查询数据
         List<DocumentVector> vectors = documentVectorRepository.findByFileMd5(fileMd5);
 
-        // 转换为 TextChunk 列表
+        // 转换为 TextChunk 列表（携带父子分块信息）
         return vectors.stream()
                 .map(vector -> new TextChunk(
                         vector.getChunkId(),
-                        vector.getTextContent()
+                        vector.getTextContent(),
+                        vector.getParentChunkId(),
+                        vector.getParentContent()
                 ))
                 .toList();
     }
