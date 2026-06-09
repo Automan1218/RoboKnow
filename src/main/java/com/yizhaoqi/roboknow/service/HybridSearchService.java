@@ -125,18 +125,10 @@ public class HybridSearchService {
             List<SearchResult> results = response.hits().hits().stream()
                     .map(hit -> {
                         assert hit.source() != null;
-                        logger.debug("搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}", 
-                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(), 
+                        logger.debug("搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}",
+                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(),
                             hit.source().getTextContent().substring(0, Math.min(50, hit.source().getTextContent().length())));
-                        return new SearchResult(
-                                hit.source().getFileMd5(),
-                                hit.source().getChunkId(),
-                                hit.source().getTextContent(),
-                                hit.score(),
-                                hit.source().getUserId(),
-                                hit.source().getOrgTag(),
-                                hit.source().isPublic()
-                        );
+                        return toSearchResult(hit.source(), hit.score());
                     })
                     .filter(result -> isSearchResultAccessible(result, userDbId, userEffectiveTags))
                     .toList();
@@ -230,18 +222,10 @@ public class HybridSearchService {
             List<SearchResult> results = response.hits().hits().stream()
                     .map(hit -> {
                         assert hit.source() != null;
-                        logger.debug("纯文本搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}", 
-                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(), 
+                        logger.debug("纯文本搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}",
+                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(),
                             hit.source().getTextContent().substring(0, Math.min(50, hit.source().getTextContent().length())));
-                        return new SearchResult(
-                                hit.source().getFileMd5(),
-                                hit.source().getChunkId(),
-                                hit.source().getTextContent(),
-                                hit.score(),
-                                hit.source().getUserId(),
-                                hit.source().getOrgTag(),
-                                hit.source().isPublic()
-                        );
+                        return toSearchResult(hit.source(), hit.score());
                     })
                     .filter(result -> isSearchResultAccessible(result, userDbId, userEffectiveTags))
                     .toList();
@@ -459,6 +443,24 @@ public class HybridSearchService {
             }
             return bf;
         }));
+    }
+
+    /**
+     * 将 ES 命中（子块）转换为 SearchResult，携带父块信息用于 small-to-big 回溯。
+     */
+    private SearchResult toSearchResult(EsDocument source, Double score) {
+        SearchResult result = new SearchResult(
+                source.getFileMd5(),
+                source.getChunkId(),
+                source.getTextContent(),
+                score,
+                source.getUserId(),
+                source.getOrgTag(),
+                source.isPublic()
+        );
+        result.setParentChunkId(source.getParentChunkId());
+        result.setParentContent(source.getParentContent());
+        return result;
     }
 
     private boolean isSearchResultAccessible(SearchResult result, String userDbId, List<String> userEffectiveTags) {

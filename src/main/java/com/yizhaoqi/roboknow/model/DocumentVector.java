@@ -26,6 +26,22 @@ public class DocumentVector {
     @Lob
     private String textContent;
 
+    /**
+     * 父块编号（父子分块）。同一父块下的多个子块共享同一个 parentChunkId。
+     * 召回时用子块（小、精准）匹配，再回溯到父块（大、上下文完整）喂给 LLM。
+     * 旧数据为空时检索侧回退到 textContent。
+     */
+    @Column(name = "parent_chunk_id")
+    private Integer parentChunkId;
+
+    /**
+     * 父块完整文本（反规范化存储，避免检索时回表 join）。
+     * 显式 LONGTEXT：Hibernate 6 对 @Lob String 在 MySQL 上映射不稳定（可能落成 VARCHAR(255)），
+     * 父块文本可达数千字符，必须用大文本列。
+     */
+    @Column(name = "parent_content", columnDefinition = "LONGTEXT")
+    private String parentContent;
+
     @Column(length = 32)
     private String modelVersion;
     

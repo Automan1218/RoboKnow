@@ -72,7 +72,9 @@ admin:
 
 file:
   parsing:
-    chunk-size: 512 # 每个文本块的最大字符数
+    chunk-size: 512 # 父块最大字符数（父子分块时作为喂给 LLM 的上下文块）
+    parent-child-enabled: true # 父子分块开关：子块向量召回 + 父块上下文回溯
+    child-chunk-size: 200 # 子块最大字符数（向量化/召回单元，须明显小于 chunk-size）
     buffer-size: 8192    # 8KB 缓冲区
     max-memory-threshold: 0.8  # 80% 内存阈值
 
