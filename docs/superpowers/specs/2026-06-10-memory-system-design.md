@@ -21,6 +21,7 @@
 3. LTM 注入无相关性过滤，最近 3 条无条件塞进 system prompt。
 4. Redis history 走 get-modify-set，并发同会话有写竞争。
 5. 无统一 token 预算视图。
+6. **无多会话支持**：`user:{userId}:current_conversation` 单 convId 7 天过期才重置，用户无法新建、切换或查看历史对话。
 
 ### 1.2 目标
 - 用**门面模式**把记忆从 Agent 解耦：Agent 只调 `MemoryManager`，不感知底层。
@@ -28,6 +29,7 @@
 - 长期记忆从"流水账摘要"升级为"**去重的事实/偏好**"。
 - 压缩与事实提取**移出同步请求链路**，控住 P99 延迟。
 - 全链路**多租户隔离**，杜绝跨用户记忆串味。
+- **多会话支持**：用户可新建、切换、删除对话，每个会话记忆相互隔离。
 
 ### 1.3 非目标（YAGNI）
 - 不做向量化记忆检索（v2 再议，见 §6）。
@@ -65,15 +67,49 @@
         ▼              ▼          ▼          ▼              ▼
  ConversationMemory  TokenBudget ContextCompressor LongTermMemory MemoryRetriever
    (短期·Redis)      (预算·内存)  (压缩·异步LLM)    (长期·MySQL)   (检索·关键词+衰减)
+
+           ┌──────────────────────────────────────┐
+           │      SessionManager (会话生命周期)     │◀──── Controller 层调用
+           │  create / list / switch / delete     │
+           │  持久化：MySQL conversation_sessions  │
+           └──────────────────────────────────────┘
 ```
 
 Agent 侧只剩两个调用：
 - `loadContext(userId, convId, userMessage)` → 返回拼好的上下文消息列表。
 - `record(userId, convId, question, answer)` → 存交互，内部按需触发压缩/事实提取。
 
+Controller 层（WebSocket/REST）通过 `SessionManager` 管理会话生命周期，解耦于记忆逻辑。
+
 ---
 
 ## 4. 组件设计
+
+### 4.0 SessionManager（会话生命周期，新增）
+
+**职责**：管理会话的创建/列表/切换/删除，与记忆逻辑完全解耦。Controller 层调 SessionManager，MemoryManager 只接受已存在的 `convId`。
+
+**持久化**：MySQL 新表 `conversation_sessions`，关键字段：
+- `id`（UUID PK，即 convId）
+- `user_id`（索引，隔离用）
+- `title`（会话标题，最长 100 字；首轮后异步 LLM 生成，失败则截取用户首条消息前 30 字）
+- `status`（`active` / `archived`）
+- `created_at` / `last_active_at`
+
+**接口语义**：
+- `createSession(userId)` → 生成 UUID convId，写 `conversation_sessions`，更新 Redis `user:{userId}:active_conversation`，返回 convId。
+- `listSessions(userId)` → 按 `last_active_at DESC` 返回该用户所有 `active` 会话（含 title、时间戳），前端展示历史列表用。
+- `switchSession(userId, convId)` → 校验 `conversation_sessions.user_id == userId`（防越权），更新 Redis `user:{userId}:active_conversation`。
+- `deleteSession(userId, convId)` → 校验所有权，软删（status → `archived`），**显式清理** Redis `conversation:{convId}` 及 `conversation:{convId}:*` 所有 key（不等 TTL 自然过期，及时释放内存）。
+- `getActiveConvId(userId)` → Redis 先查 `user:{userId}:active_conversation`；miss 则查 MySQL 最新 `active` 会话；均无则自动 `createSession()`（保证 Agent 调用路径不需要 null 判断）。
+
+**WebSocket 接入**：客户端握手时传 `convId`（可选）。
+- 有 `convId`：SessionManager 校验所有权后使用。
+- 无 `convId`：`getActiveConvId()` 返回当前活跃会话或自动创建。
+
+**自动标题生成**：首轮 `record()` 完成后，异步触发 `generateTitle(convId, firstUserMessage)`，5-10 字精炼，写回 `conversation_sessions.title`。失败静默降级（截断前 30 字）。
+
+**Redis key 迁移**：旧 `user:{userId}:current_conversation` 改名为 `user:{userId}:active_conversation`，语义从"7 天才重置的单会话"变为"当前选中会话的指针"；由 `switchSession` / `deleteSession` 显式维护，而非依赖 TTL 被动重置。
 
 ### 4.1 ConversationMemory（短期记忆）
 - **载体**：Redis `conversation:{convId}`，TTL 7 天。
@@ -165,6 +201,26 @@ Agent → MemoryManager.record()
    → 【异步】extractFacts 收尾 → LongTermMemory
 ```
 
+**会话创建/切换流**：
+```
+前端 → ConversationController.createSession(userId)
+      → SessionManager.createSession(userId)
+         → 写 conversation_sessions（MySQL）
+         → 写 user:{userId}:active_conversation（Redis）
+      → 返回 convId 给前端
+
+前端 → ConversationController.switchSession(userId, convId)
+      → SessionManager.switchSession(userId, convId)
+         → 校验 user_id 所有权（防越权）
+         → 更新 user:{userId}:active_conversation（Redis）
+
+WebSocket 握手 → ChatHandler.handleMessage(userId, convId?)
+      → SessionManager.getActiveConvId(userId)
+         → Redis hit：直接用
+         → Redis miss：查 MySQL 最新 active 会话 / 自动 createSession
+      → Agent 拿到 convId 后调 MemoryManager.loadContext(userId, convId, msg)
+```
+
 ---
 
 ## 6. 演进路线
@@ -179,6 +235,8 @@ Agent → MemoryManager.record()
 | 风险 | 应对 |
 |---|---|
 | **跨租户记忆泄漏** | 所有 Redis key / MySQL 查询强制带 userId；facts 仅私有，不按 orgTag 共享。回归测试覆盖越权场景。 |
+| **会话越权访问** | `switchSession` / `deleteSession` 强校验 `conversation_sessions.user_id == 当前用户`；WebSocket 握手传入的 convId 同样校验所有权。 |
+| **删除后 Redis 残留** | `deleteSession` 显式 DEL `conversation:{convId}` 及所有子 key，不依赖 TTL，防止 key 泄漏到下一个创建相同 convId 的用户（UUID 碰撞概率极低但防御性清理）。 |
 | **压缩拖慢 P99** | Map-Reduce 全异步，独立线程池，与请求链路隔离；线程池满则跳过本次压缩（降级），不阻塞用户。 |
 | **成本失控** | 最坏一轮 = STM 压缩 + 事实提取多次 LLM。用增量计数 + 节流，避免每轮都触发；压缩走便宜模型。 |
 | **并发写竞争** | Redis 原子操作 / Lua 脚本替换 get-modify-set。 |
@@ -192,10 +250,13 @@ Agent → MemoryManager.record()
 - 保留 `conversation:{id}` 与 `conversation:{id}:stm_summary` 两个 Redis key，平滑兼容现有数据。
 - `conversations` 表不动，新增 `user_memory_facts` 表（JPA 自动建表）。
 - 重构分阶段：先抽门面（行为不变）→ 再换 token 预算淘汰 → 再上事实提取与检索。每步独立可回滚。
+- `user:{userId}:current_conversation` → `user:{userId}:active_conversation`：启动时读旧 key 做一次迁移写，旧 key 设 1 天 TTL 自动消亡，无需停机。
+- `conversation_sessions` 表新建；存量对话无 session 记录的用户，首次触发 `getActiveConvId()` 时自动创建默认会话并关联历史 convId。
 
 ---
 
-## 9. 已定稿的三个关键决策
+## 9. 已定稿的四个关键决策
 1. **事实提取触发点**：(b) 会话空闲 30min 超时 + (c) 每 10 轮增量，组合触发。
 2. **LongTermMemory 隔离**：仅 userId，私有不共享（不带 orgTag）。
 3. **conversations 表**：保留做审计；新 `user_memory_facts` 表做注入，职责分离。
+4. **多会话**：SessionManager 独立组件，`conversation_sessions` MySQL 表持久化，Redis `active_conversation` key 存指针；WebSocket 握手可传 convId，缺省自动取活跃会话；会话删除显式清理 Redis。
