@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const chatStore = useChatStore();
-const { input, list, wsStatus, wsData, usageLoading, currentTurnUsage, sessionUsage } = storeToRefs(chatStore);
+const { input, list, wsStatus, wsData, usageLoading, currentTurnUsage, sessionUsage, activeConvId } = storeToRefs(chatStore);
 
 const latestMessage = computed(() => list.value[list.value.length - 1] ?? {});
 
@@ -62,7 +62,8 @@ const handleSend = async () => {
   if (isSending.value) {
     const { error, data } = await request<Api.Chat.Token>({ url: 'chat/websocket-token', baseURL: 'proxy-api' });
     if (error) return;
-    chatStore.wsSend(JSON.stringify({ type: 'stop', _internal_cmd_token: data.cmdToken }));
+    // Stop command uses raw send — bypass JSON message wrapper
+    chatStore.wsRawSend(JSON.stringify({ type: 'stop', _internal_cmd_token: data.cmdToken }));
     list.value[list.value.length - 1].status = 'finished';
     if (!latestMessage.value.content) list.value.pop();
     return;
@@ -71,6 +72,7 @@ const handleSend = async () => {
   const message = input.value.message;
   await chatStore.prepareCurrentTurnUsage();
   list.value.push({ content: message, role: 'user' });
+  // wsSend sends JSON { message, convId } so backend routes to the correct session
   chatStore.wsSend(message);
   list.value.push({ content: '', role: 'assistant', status: 'pending' });
   input.value.message = '';
@@ -153,6 +155,11 @@ onMounted(() => {
               <icon-fluent:plug-connected-checkmark-20-filled v-else-if="wsStatus === 'OPEN'" class="text-sm" />
               <icon-tabler:plug-connected-x v-else class="text-sm" />
               <span class="text-gray-400">{{ wsStatusLabel }}</span>
+            </div>
+
+            <div v-if="activeConvId" class="hidden items-center gap-1 text-gray-400 sm:flex">
+              <icon-solar:chat-square-linear class="text-xs text-primary/60" />
+              <span class="max-w-[120px] truncate font-mono text-[10px] text-gray-400">{{ activeConvId.slice(0, 8) }}…</span>
             </div>
 
             <div class="flex items-center gap-1.5 text-gray-400">

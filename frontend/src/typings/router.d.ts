@@ -68,5 +68,7 @@ declare module 'vue-router' {
     fixedIndexInTab?: number | null;
     /** if set query parameters, it will be automatically carried when entering the route */
     query?: { key: string; value: string }[] | null;
+    /** If true, the page content area renders without padding (for full-height immersive layouts) */
+    contentFull?: boolean | null;
   }
 }

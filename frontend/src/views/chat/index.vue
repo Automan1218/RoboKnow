@@ -2,21 +2,40 @@
 import { NDrawer, NDrawerContent } from 'naive-ui';
 import ChatList from './modules/chat-list.vue';
 import InputBox from './modules/input-box.vue';
+import SessionList from './modules/session-list.vue';
 import FilePreview from '@/components/custom/file-preview.vue';
+import { useAppStore } from '@/store/modules/app';
 
 const chatStore = useChatStore();
+const appStore = useAppStore();
 
 const previewVisible = computed(() => !!chatStore.previewFileName);
 
 function closePreview() {
   chatStore.previewFileName = '';
 }
+
+// Collapse app nav to icon rail when in chat; restore on leave
+let prevCollapse = false;
+onMounted(() => {
+  prevCollapse = appStore.siderCollapse;
+  appStore.setSiderCollapse(true);
+});
+onUnmounted(() => {
+  appStore.setSiderCollapse(prevCollapse);
+});
 </script>
 
 <template>
-  <div class="flex flex-col overflow-hidden" style="height:100%">
-    <ChatList class="min-h-0 flex-1" />
-    <InputBox />
+  <div class="flex h-full overflow-hidden">
+    <!-- Session sidebar (GPT/Claude style) -->
+    <SessionList />
+
+    <!-- Main chat area -->
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <ChatList class="min-h-0 flex-1" />
+      <InputBox />
+    </div>
   </div>
 
   <NDrawer

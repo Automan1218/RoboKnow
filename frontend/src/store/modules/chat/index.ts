@@ -1,4 +1,5 @@
 import { useWebSocket } from '@vueuse/core';
+import { fetchSessions, createSession, switchSession, deleteSession } from '@/service/api/conversation';
 
 const emptyUsageSummary = (): Api.AiUsage.Summary => ({
   promptTokens: 0,
@@ -30,20 +31,80 @@ export const useChatStore = defineStore(SetupStoreId.Chat, () => {
   const currentTurnBaseline = ref<Api.AiUsage.Summary | null>(null);
   const sessionBaseline = ref<Api.AiUsage.Summary | null>(null);
 
+  // ── Multi-session state ──────────────────────────────────────────────────
+  const sessions = ref<Api.Chat.Session[]>([]);
+  const activeConvId = ref<string>('');
+  const sessionsLoading = ref(false);
+
   const store = useAuthStore();
 
   const {
     status: wsStatus,
     data: wsData,
-    send: wsSend,
+    send: _wsSend,
     open: wsOpen,
     close: wsClose
   } = useWebSocket(`/proxy-ws/chat/${store.token}`, {
     autoReconnect: true
   });
 
+  /** Send JSON message with convId so backend routes to the correct session */
+  function wsSend(message: string) {
+    const payload = JSON.stringify({ message, convId: activeConvId.value || undefined });
+    _wsSend(payload);
+  }
+
   const scrollToBottom = ref<null | (() => void)>(null);
   const previewFileName = ref<string>('');
+
+  // ── Session management ───────────────────────────────────────────────────
+
+  async function loadSessions() {
+    sessionsLoading.value = true;
+    const { error, data } = await fetchSessions();
+    if (!error && data) {
+      sessions.value = data;
+      if (!activeConvId.value && data.length > 0) {
+        activeConvId.value = data[0].convId;
+      }
+    }
+    sessionsLoading.value = false;
+  }
+
+  async function newSession() {
+    const { error, data } = await createSession();
+    if (!error && data) {
+      activeConvId.value = data.convId;
+      list.value = [];
+      await loadSessions();
+    }
+  }
+
+  async function switchToSession(convId: string) {
+    if (convId === activeConvId.value) return;
+    const { error } = await switchSession(convId);
+    if (!error) {
+      activeConvId.value = convId;
+      list.value = [];
+    }
+  }
+
+  async function removeSession(convId: string) {
+    const { error } = await deleteSession(convId);
+    if (!error) {
+      await loadSessions();
+      // If we deleted the active session, switch to first available
+      if (convId === activeConvId.value) {
+        if (sessions.value.length > 0) {
+          await switchToSession(sessions.value[0].convId);
+        } else {
+          await newSession();
+        }
+      }
+    }
+  }
+
+  // ── Usage ────────────────────────────────────────────────────────────────
 
   async function fetchUsageSummary() {
     const { error, data } = await request<Api.AiUsage.Response>({ url: 'ai/usage' });
@@ -89,6 +150,7 @@ export const useChatStore = defineStore(SetupStoreId.Chat, () => {
     wsStatus,
     wsData,
     wsSend,
+    wsRawSend: _wsSend,
     wsOpen,
     wsClose,
     scrollToBottom,
@@ -99,6 +161,14 @@ export const useChatStore = defineStore(SetupStoreId.Chat, () => {
     sessionUsage,
     initUsageBaseline,
     prepareCurrentTurnUsage,
-    refreshUsage
+    refreshUsage,
+    // Session exports
+    sessions,
+    activeConvId,
+    sessionsLoading,
+    loadSessions,
+    newSession,
+    switchToSession,
+    removeSession
   };
 });
