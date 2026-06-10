@@ -167,6 +167,13 @@
             <version>2.10.1</version>
         </dependency>
 
+        <!-- jtokkit: accurate token counting for OpenAI models -->
+        <dependency>
+            <groupId>com.knuddels</groupId>
+            <artifactId>jtokkit</artifactId>
+            <version>1.1.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>
