@@ -32,7 +32,7 @@ async function handleDelete(e: MouseEvent, convId: string) {
 </script>
 
 <template>
-  <div class="flex h-full w-60 shrink-0 flex-col bg-[#171717] dark:bg-[#171717]">
+  <div class="flex w-60 shrink-0 flex-col bg-[#171717] dark:bg-[#171717]">
     <!-- New chat button -->
     <div class="px-3 pt-4 pb-2">
       <button

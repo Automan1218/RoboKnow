@@ -27,7 +27,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full overflow-hidden">
+  <div class="flex min-h-0 overflow-hidden">
     <!-- Session sidebar (GPT/Claude style) -->
     <SessionList />
 
