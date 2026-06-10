@@ -52,7 +52,7 @@ function resetScroll() {
           :is="Component"
           v-if="appStore.reloadFlag"
           :key="tabStore.getTabIdByRoute(route)"
-          :class="{ 'p-[32px_16px_16px_32px]': showPadding }"
+          :class="route.name === 'chat' ? 'p-0 overflow-hidden' : (showPadding ? 'p-[32px_16px_16px_32px]' : '')"
           class="flex-grow bg-layout transition-300"
         />
       </KeepAlive>

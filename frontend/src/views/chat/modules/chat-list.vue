@@ -7,13 +7,18 @@ defineOptions({
 });
 
 const chatStore = useChatStore();
-const { list } = storeToRefs(chatStore);
+const { list, activeConvId } = storeToRefs(chatStore);
 
 const loading = ref(false);
 const scrollRef = ref<HTMLDivElement>();
 
 watch(() => list.value.length, scrollToBottom);
 watch(() => list.value[list.value.length - 1]?.content, scrollToBottom);
+
+// Reload history whenever active session changes
+watch(activeConvId, () => {
+  loadSessionHistory();
+});
 
 function scrollToBottom() {
   nextTick(() => {
@@ -23,22 +28,10 @@ function scrollToBottom() {
   });
 }
 
-const range = ref<[number, number]>([dayjs().subtract(7, 'day').valueOf(), dayjs().add(1, 'day').valueOf()]);
-
-const params = computed(() => ({
-  start_date: dayjs(range.value[0]).format('YYYY-MM-DD'),
-  end_date: dayjs(range.value[1]).format('YYYY-MM-DD')
-}));
-
-watchEffect(() => {
-  getList();
-});
-
-async function getList() {
+async function loadSessionHistory() {
   loading.value = true;
   const { error, data } = await request<Api.Chat.Message[]>({
-    url: 'users/conversation',
-    params: params.value
+    url: 'users/conversation'
   });
   if (!error) {
     list.value = data;
@@ -48,6 +41,7 @@ async function getList() {
 
 onMounted(() => {
   chatStore.scrollToBottom = scrollToBottom;
+  loadSessionHistory();
 });
 
 const suggestions = [
@@ -64,17 +58,6 @@ function useSuggestion(text: string) {
 
 <template>
   <div class="flex h-full flex-col overflow-hidden">
-    <!-- Header controls teleported to global header -->
-    <Teleport defer to="#header-extra">
-      <div class="px-10">
-        <NForm :model="params" label-placement="left" :show-feedback="false" inline>
-          <NFormItem label="Date">
-            <NDatePicker v-model:value="range" type="daterange" />
-          </NFormItem>
-        </NForm>
-      </div>
-    </Teleport>
-
     <!-- Messages scrollable area -->
     <div ref="scrollRef" class="flex-1 overflow-y-auto scroll-smooth">
       <NSpin :show="loading">

@@ -70,18 +70,27 @@ public class ConversationController {
             possibleUserIds.add(username);                 // 用户名
             possibleUserIds.add(String.valueOf(user.getId())); // 另一种数据库ID格式
             
-            // 检查所有Redis键，尝试找到与用户相关的会话ID
+            // 检查所有Redis键：优先 active_conversation（新 key），回退 current_conversation（旧 key）
             List<String> matchingKeys = new ArrayList<>();
             for (String uId : possibleUserIds) {
-                String key = "user:" + uId + ":current_conversation";
-                String conversationId = redisTemplate.opsForValue().get(key);
+                // Check new active_conversation key first (set by SessionManager)
+                String activeKey = "user:" + uId + ":active_conversation";
+                String conversationId = redisTemplate.opsForValue().get(activeKey);
                 if (conversationId != null) {
-                    matchingKeys.add(key);
-                    LogUtils.logBusiness("GET_CONVERSATIONS", username, "找到对话会话ID: %s", conversationId);
+                    matchingKeys.add(activeKey);
+                    LogUtils.logBusiness("GET_CONVERSATIONS", username, "找到活跃会话ID (active_conversation): %s", conversationId);
                     return getConversationsFromRedis(conversationId, username, start_date, end_date, monitor);
                 }
-                
-                LogUtils.logBusiness("GET_CONVERSATIONS", username, "尝试查找Redis键: %s, 结果: 未找到", key);
+                // Fall back to legacy current_conversation key
+                String legacyKey = "user:" + uId + ":current_conversation";
+                conversationId = redisTemplate.opsForValue().get(legacyKey);
+                if (conversationId != null) {
+                    matchingKeys.add(legacyKey);
+                    LogUtils.logBusiness("GET_CONVERSATIONS", username, "找到对话会话ID (current_conversation): %s", conversationId);
+                    return getConversationsFromRedis(conversationId, username, start_date, end_date, monitor);
+                }
+
+                LogUtils.logBusiness("GET_CONVERSATIONS", username, "尝试查找Redis键: %s, 结果: 未找到", legacyKey);
             }
             
             // 无法找到任何对话记录

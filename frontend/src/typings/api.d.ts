@@ -204,6 +204,13 @@ declare namespace Api {
     interface Token {
       cmdToken: string;
     }
+
+    interface Session {
+      convId: string;
+      title: string;
+      createdAt: string;
+      lastActiveAt: string;
+    }
   }
 
   namespace AiUsage {
