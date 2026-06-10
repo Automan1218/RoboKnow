@@ -1,47 +1,29 @@
 package com.yizhaoqi.roboknow.agent;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yizhaoqi.roboknow.agent.tool.ToolRegistry;
 import com.yizhaoqi.roboknow.client.AiUsageMetadata;
 import com.yizhaoqi.roboknow.client.OpenAiClient;
+import com.yizhaoqi.roboknow.memory.MemoryManager;
 import com.yizhaoqi.roboknow.service.AgentStopService;
-import com.yizhaoqi.roboknow.service.ConversationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * ReAct Agent with short-term memory compression and long-term memory injection.
- *
- * Short-term: Redis conversation history. When > STM_THRESHOLD messages, oldest messages
- * are compressed into a rolling summary stored at conversation:{id}:stm_summary.
- * Context sent to LLM = [system] + [STM summary?] + [LTM summaries?] + [last CONTEXT_WINDOW messages] + [user msg]
- *
- * Long-term: after each exchange a one-sentence summary is saved to DB via ConversationService.
- * On new messages the last LTM_LIMIT summaries are injected as system context.
- */
 @Service
 public class ReactAgentService {
 
     private static final Logger logger = LoggerFactory.getLogger(ReactAgentService.class);
     private static final int MAX_ITERATIONS = 5;
-    private static final int STM_THRESHOLD = 20;   // compress when history exceeds this
-    private static final int CONTEXT_WINDOW = 10;  // recent messages sent to LLM
-    private static final int LTM_LIMIT = 3;        // past conversation summaries to inject
 
     private static final Pattern THOUGHT_PATTERN =
         Pattern.compile("Thought:\\s*(.+?)(?=\\nAction:|\\nFinal Answer:|$)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
@@ -56,40 +38,35 @@ public class ReactAgentService {
     private final ToolRegistry toolRegistry;
     private final AnswerGroundingService answerGroundingService;
     private final AgentStopService agentStopService;
-    private final RedisTemplate<String, String> redisTemplate;
-    private final ConversationService conversationService;
+    private final MemoryManager memoryManager;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ReactAgentService(OpenAiClient openAiClient,
-                             ToolRegistry toolRegistry,
-                             AnswerGroundingService answerGroundingService,
-                             AgentStopService agentStopService,
-                             RedisTemplate<String, String> redisTemplate,
-                             ConversationService conversationService) {
+                              ToolRegistry toolRegistry,
+                              AnswerGroundingService answerGroundingService,
+                              AgentStopService agentStopService,
+                              MemoryManager memoryManager) {
         this.openAiClient = openAiClient;
         this.toolRegistry = toolRegistry;
         this.answerGroundingService = answerGroundingService;
         this.agentStopService = agentStopService;
-        this.redisTemplate = redisTemplate;
-        this.conversationService = conversationService;
+        this.memoryManager = memoryManager;
     }
 
-    // ─────────────────────────────────────────────────────────
-    // Entry point
-    // ─────────────────────────────────────────────────────────
-
-    public void processMessage(String userId, String userMessage, WebSocketSession session) {
-        logger.info("ReactAgent processing message, user: {}", userId);
+    public void processMessage(String userId, String convId, String userMessage, WebSocketSession session) {
+        logger.info("ReactAgent processing message, user: {}, convId: {}", userId, convId);
         try {
-            String conversationId = getOrCreateConversationId(userId);
-            List<Map<String, String>> history = getConversationHistory(conversationId);
+            List<Map<String, String>> contextMessages =
+                    memoryManager.loadContext(userId, convId, userMessage);
 
-            AgentContext ctx = new AgentContext(userId, userMessage, conversationId, history, session);
-            String finalAnswer = runReActLoop(ctx);
+            AgentContext ctx = new AgentContext(userId, userMessage, convId,
+                    new ArrayList<>(), session);
+
+            String finalAnswer = runReActLoop(ctx, contextMessages);
 
             sendCompletionNotification(session);
-            updateConversationHistory(conversationId, userId, userMessage, finalAnswer);
-            logger.info("ReactAgent done, user: {}", userId);
+            memoryManager.record(userId, convId, userMessage, finalAnswer);
+            logger.info("ReactAgent done, user: {}, convId: {}", userId, convId);
         } catch (Exception e) {
             logger.error("ReactAgent failed: {}", e.getMessage(), e);
             sendError(session, "The AI service is temporarily unavailable. Please try again later.");
@@ -102,8 +79,9 @@ public class ReactAgentService {
     // ReAct loop
     // ─────────────────────────────────────────────────────────
 
-    private String runReActLoop(AgentContext ctx) throws InterruptedException {
-        List<Map<String, String>> messages = buildInitialMessages(ctx);
+    private String runReActLoop(AgentContext ctx, List<Map<String, String>> contextMessages)
+            throws InterruptedException {
+        List<Map<String, String>> messages = buildInitialMessages(ctx, contextMessages);
         List<String> observations = new ArrayList<>();
         String finalAnswer = null;
 
@@ -132,9 +110,6 @@ public class ReactAgentService {
             }
 
             if (step.isFinalAnswer) {
-                // Guard: never accept a Final Answer without at least one knowledge-base search.
-                // LLMs sometimes skip the tool call when conversation history already contains
-                // related content. Force a search on the raw user message and continue the loop.
                 if (observations.isEmpty()) {
                     logger.warn("LLM skipped tool call and gave direct Final Answer — forcing hybrid_search");
                     pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.ACTING, i + 1));
@@ -145,7 +120,7 @@ public class ReactAgentService {
                     pushEvent(ctx.getSession(), AgentEvent.observation("hybrid_search", forcedObs));
                     messages.add(Map.of("role", "assistant", "content", step.formatAssistantContent()));
                     messages.add(Map.of("role", "user", "content", "Observation: " + forcedObs));
-                    continue; // re-enter loop so LLM can produce a grounded answer
+                    continue;
                 }
                 finalAnswer = step.finalAnswer;
                 break;
@@ -153,7 +128,6 @@ public class ReactAgentService {
 
             pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.ACTING, i + 1));
             pushEvent(ctx.getSession(), AgentEvent.action(step.action, step.actionInput));
-
             pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.OBSERVING, i + 1));
             String observation = toolRegistry.execute(step.action, step.actionInput, ctx);
             observations.add(observation);
@@ -161,7 +135,7 @@ public class ReactAgentService {
             logger.debug("Tool {} returned observation ({} chars)", step.action, observation.length());
 
             messages.add(Map.of("role", "assistant", "content", step.formatAssistantContent()));
-            messages.add(Map.of("role", "user",      "content", "Observation: " + observation));
+            messages.add(Map.of("role", "user", "content", "Observation: " + observation));
         }
 
         if (finalAnswer == null) {
@@ -169,44 +143,20 @@ public class ReactAgentService {
         }
 
         finalAnswer = answerGroundingService.groundAnswer(
-            ctx.getUserMessage(),
-            finalAnswer,
-            observations,
+            ctx.getUserMessage(), finalAnswer, observations,
             new AiUsageMetadata(ctx.getUserId(), ctx.getConversationId(), "answer_grounding")
         );
 
         pushEvent(ctx.getSession(), AgentEvent.stateChange(AgentState.ANSWERING, 0));
         streamText(ctx.getSession(), finalAnswer);
-
         return finalAnswer;
     }
 
-    // ─────────────────────────────────────────────────────────
-    // Message construction with memory
-    // ─────────────────────────────────────────────────────────
-
-    private List<Map<String, String>> buildInitialMessages(AgentContext ctx) {
+    private List<Map<String, String>> buildInitialMessages(AgentContext ctx,
+                                                             List<Map<String, String>> contextMessages) {
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", buildSystemPrompt()));
-
-        // Long-term memory: summaries of recent past conversations (cross-session)
-        String ltmContext = loadLongTermContext(ctx.getUserId());
-        if (ltmContext != null) {
-            messages.add(Map.of("role", "system", "content", ltmContext));
-        }
-
-        // Short-term memory: compressed summary of older in-session messages
-        String stmSummary = getShortTermSummary(ctx.getConversationId());
-        if (stmSummary != null) {
-            messages.add(Map.of("role", "system", "content",
-                    "Summary of earlier conversation in this session:\n" + stmSummary));
-        }
-
-        // Recent history within context window
-        List<Map<String, String>> history = ctx.getHistory();
-        int start = Math.max(0, history.size() - CONTEXT_WINDOW);
-        messages.addAll(history.subList(start, history.size()));
-
+        messages.addAll(contextMessages); // LTM facts + STM summary + recent history from MemoryManager
         messages.add(Map.of("role", "user", "content", ctx.getUserMessage()));
         return messages;
     }
@@ -235,178 +185,6 @@ public class ReactAgentService {
     }
 
     // ─────────────────────────────────────────────────────────
-    // Long-term memory (DB-backed, cross-session)
-    // ─────────────────────────────────────────────────────────
-
-    private String loadLongTermContext(String username) {
-        try {
-            List<String> summaries = conversationService.getRecentSummaries(username, LTM_LIMIT);
-            if (summaries.isEmpty()) return null;
-            StringBuilder sb = new StringBuilder("Previous conversation topics (for context only):\n");
-            for (String s : summaries) {
-                sb.append("- ").append(s).append("\n");
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            logger.warn("Failed to load long-term memory for user {}: {}", username, e.getMessage());
-            return null;
-        }
-    }
-
-    private static final List<String> EMPTY_ANSWER_SIGNALS = List.of(
-        "no relevant", "not found", "no information", "insufficient evidence", "does not support"
-    );
-
-    private boolean isWorthSavingToLtm(String question, String answer) {
-        String combined = question + answer;
-        if (combined.length() < 50) return false;
-        String lowerAnswer = answer.toLowerCase();
-        for (String signal : EMPTY_ANSWER_SIGNALS) {
-            if (lowerAnswer.contains(signal.toLowerCase())) return false;
-        }
-        return true;
-    }
-
-    private void saveToLongTermMemory(String username, String question, String answer) {
-        if (!isWorthSavingToLtm(question, answer)) {
-            logger.debug("Skipping LTM write because the content has no substantive conclusion, user: {}", username);
-            return;
-        }
-        try {
-            String snippet = answer.length() > 500 ? answer.substring(0, 500) : answer;
-            List<Map<String, String>> req = List.of(
-                Map.of("role", "system", "content",
-                       "Extract confirmed key conclusions, facts, or important information from the following Q&A in one sentence. " +
-                       "Only extract explicit and specific conclusions. Do not summarize the question itself. Do not write 'the user asked...'."),
-                Map.of("role", "user", "content",
-                       "Question: " + question + "\nAnswer: " + snippet)
-            );
-            String summary = openAiClient.chatBlocking(req, new AiUsageMetadata(username, null, "ltm_summary"));
-            if (summary == null || summary.isBlank()) {
-                summary = question.length() > 120 ? question.substring(0, 120) + "..." : question;
-            }
-            conversationService.recordConversation(username, question, answer, summary);
-            logger.debug("LTM write succeeded, user: {}, summary: {}", username, summary);
-        } catch (Exception e) {
-            logger.warn("LTM write failed, user: {}: {}", username, e.getMessage());
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // Short-term memory (Redis, in-session compression)
-    // ─────────────────────────────────────────────────────────
-
-    private String getShortTermSummary(String conversationId) {
-        try {
-            return redisTemplate.opsForValue().get(stmSummaryKey(conversationId));
-        } catch (Exception e) {
-            logger.warn("Failed to read STM summary: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Summarizes messages[0..size-CONTEXT_WINDOW] into a rolling summary,
-     * persists it to Redis, and returns only the recent tail.
-     */
-    private List<Map<String, String>> compressShortTermMemory(String conversationId,
-                                                               List<Map<String, String>> history) {
-        int splitAt = history.size() - CONTEXT_WINDOW;
-        List<Map<String, String>> toCompress = history.subList(0, splitAt);
-        List<Map<String, String>> recent = new ArrayList<>(history.subList(splitAt, history.size()));
-
-        try {
-            String existing = getShortTermSummary(conversationId);
-            StringBuilder input = new StringBuilder();
-            if (existing != null && !existing.isBlank()) {
-                input.append("Previous summary:\n").append(existing).append("\n\nNew messages to incorporate:\n");
-            }
-            for (Map<String, String> msg : toCompress) {
-                input.append(msg.get("role")).append(": ").append(msg.get("content")).append("\n");
-            }
-
-            List<Map<String, String>> req = List.of(
-                Map.of("role", "system", "content",
-                       "Summarize the following conversation history in 3-5 sentences, preserving key facts and context needed to understand the ongoing conversation."),
-                Map.of("role", "user", "content", input.toString())
-            );
-            String newSummary = openAiClient.chatBlocking(req, new AiUsageMetadata("system", conversationId, "stm_summary"));
-            if (newSummary != null && !newSummary.isBlank()) {
-                redisTemplate.opsForValue().set(stmSummaryKey(conversationId), newSummary, Duration.ofDays(7));
-                logger.debug("STM compressed {} messages into summary for conversation {}", toCompress.size(), conversationId);
-            }
-        } catch (Exception e) {
-            logger.warn("STM compression failed for conversation {}: {}", conversationId, e.getMessage());
-        }
-        return recent;
-    }
-
-    private String stmSummaryKey(String conversationId) {
-        return "conversation:" + conversationId + ":stm_summary";
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // Conversation history (Redis)
-    // ─────────────────────────────────────────────────────────
-
-    private String getOrCreateConversationId(String userId) {
-        String key = "user:" + userId + ":current_conversation";
-        String conversationId = redisTemplate.opsForValue().get(key);
-        if (conversationId == null) {
-            conversationId = UUID.randomUUID().toString();
-            redisTemplate.opsForValue().set(key, conversationId, Duration.ofDays(7));
-        }
-        return conversationId;
-    }
-
-    private List<Map<String, String>> getConversationHistory(String conversationId) {
-        String key = "conversation:" + conversationId;
-        String json = redisTemplate.opsForValue().get(key);
-        try {
-            if (json == null) return new ArrayList<>();
-            return objectMapper.readValue(json, new TypeReference<>() {});
-        } catch (Exception e) {
-            logger.error("Failed to read conversation history, conversationId={}: {}", conversationId, e.getMessage());
-            return new ArrayList<>();
-        }
-    }
-
-    private void updateConversationHistory(String conversationId, String userId,
-                                           String userMessage, String response) {
-        String key = "conversation:" + conversationId;
-        List<Map<String, String>> history = getConversationHistory(conversationId);
-
-        String ts = java.time.LocalDateTime.now()
-                        .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-
-        Map<String, String> userMsg = new HashMap<>();
-        userMsg.put("role", "user");
-        userMsg.put("content", userMessage);
-        userMsg.put("timestamp", ts);
-        history.add(userMsg);
-
-        Map<String, String> assistantMsg = new HashMap<>();
-        assistantMsg.put("role", "assistant");
-        assistantMsg.put("content", response);
-        assistantMsg.put("timestamp", ts);
-        history.add(assistantMsg);
-
-        // Compress older messages instead of dropping them
-        if (history.size() > STM_THRESHOLD) {
-            history = compressShortTermMemory(conversationId, history);
-        }
-
-        try {
-            redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(history), Duration.ofDays(7));
-        } catch (Exception e) {
-            logger.error("Failed to update conversation history, conversationId={}: {}", conversationId, e.getMessage());
-        }
-
-        // Save to DB asynchronously (long-term memory)
-        CompletableFuture.runAsync(() -> saveToLongTermMemory(userId, userMessage, response));
-    }
-
-    // ─────────────────────────────────────────────────────────
     // LLM response parsing
     // ─────────────────────────────────────────────────────────
 
@@ -418,38 +196,29 @@ public class ReactAgentService {
             step.isFinalAnswer = true;
             step.finalAnswer = faMatcher.group(1).trim();
             Matcher thoughtMatcher = THOUGHT_PATTERN.matcher(response);
-            if (thoughtMatcher.find()) {
-                step.thought = thoughtMatcher.group(1).trim();
-            }
+            if (thoughtMatcher.find()) step.thought = thoughtMatcher.group(1).trim();
             return step;
         }
 
         Matcher thoughtMatcher = THOUGHT_PATTERN.matcher(response);
-        if (thoughtMatcher.find()) {
-            step.thought = thoughtMatcher.group(1).trim();
-        }
+        if (thoughtMatcher.find()) step.thought = thoughtMatcher.group(1).trim();
 
         Matcher actionMatcher = ACTION_PATTERN.matcher(response);
-        if (actionMatcher.find()) {
-            step.action = actionMatcher.group(1).trim();
-        }
+        if (actionMatcher.find()) step.action = actionMatcher.group(1).trim();
 
         Matcher inputMatcher = ACTION_INPUT_PATTERN.matcher(response);
-        if (inputMatcher.find()) {
-            step.actionInput = inputMatcher.group(1).trim();
-        }
+        if (inputMatcher.find()) step.actionInput = inputMatcher.group(1).trim();
 
         if (step.action == null || step.actionInput == null || !toolRegistry.hasTool(step.action)) {
             logger.warn("No valid tool call parsed, treating LLM response as final answer at iteration {}", iteration);
             step.isFinalAnswer = true;
             step.finalAnswer = response.trim();
         }
-
         return step;
     }
 
     // ─────────────────────────────────────────────────────────
-    // WebSocket push
+    // WebSocket push helpers
     // ─────────────────────────────────────────────────────────
 
     private void pushEvent(WebSocketSession session, AgentEvent event) {
@@ -465,18 +234,14 @@ public class ReactAgentService {
         int chunkSize = 30;
         for (int i = 0; i < text.length(); i += chunkSize) {
             if (agentStopService.shouldStop(session.getId())) break;
-
             String chunk = text.substring(i, Math.min(i + chunkSize, text.length()));
             try {
-                Map<String, String> payload = Map.of("chunk", chunk);
-                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+                session.sendMessage(new TextMessage(objectMapper.writeValueAsString(Map.of("chunk", chunk))));
             } catch (Exception e) {
                 logger.error("Failed to stream text chunk: {}", e.getMessage(), e);
                 break;
             }
-            if (i + chunkSize < text.length()) {
-                Thread.sleep(25);
-            }
+            if (i + chunkSize < text.length()) Thread.sleep(25);
         }
     }
 
@@ -496,8 +261,7 @@ public class ReactAgentService {
 
     private void sendError(WebSocketSession session, String message) {
         try {
-            Map<String, String> err = Map.of("error", message);
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(err)));
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(Map.of("error", message))));
         } catch (Exception e) {
             logger.error("Failed to send error message: {}", e.getMessage(), e);
         }

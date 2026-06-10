@@ -4,8 +4,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.yizhaoqi.roboknow.exception.CustomException;
+import com.yizhaoqi.roboknow.model.ConversationSession;
 import com.yizhaoqi.roboknow.model.User;
 import com.yizhaoqi.roboknow.repository.UserRepository;
+import com.yizhaoqi.roboknow.service.SessionManager;
 import com.yizhaoqi.roboknow.utils.JwtUtils;
 import com.yizhaoqi.roboknow.utils.LogUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,10 +23,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/users/conversation")
 public class ConversationController {
+
+    @Autowired
+    private SessionManager sessionManager;
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
@@ -214,6 +220,58 @@ public class ConversationController {
         return ResponseEntity.ok().body(response);
     }
     
+    // ── Session management endpoints ─────────────────────────────────────────
+
+    @PostMapping("/sessions")
+    public ResponseEntity<?> createSession(
+            @RequestHeader("Authorization") String token) {
+        String username = extractUsername(token);
+        String convId = sessionManager.createSession(username);
+        return ResponseEntity.ok(Map.of("code", 200, "data", Map.of("convId", convId)));
+    }
+
+    @GetMapping("/sessions")
+    public ResponseEntity<?> listSessions(
+            @RequestHeader("Authorization") String token) {
+        String username = extractUsername(token);
+        List<ConversationSession> sessions = sessionManager.listSessions(username);
+        List<Map<String, Object>> data = sessions.stream().map(s -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("convId", s.getId());
+            m.put("title", s.getTitle());
+            m.put("createdAt", s.getCreatedAt() != null ? s.getCreatedAt().toString() : null);
+            m.put("lastActiveAt", s.getLastActiveAt() != null ? s.getLastActiveAt().toString() : null);
+            return m;
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(Map.of("code", 200, "data", data));
+    }
+
+    @PostMapping("/sessions/{convId}/switch")
+    public ResponseEntity<?> switchSession(
+            @RequestHeader("Authorization") String token,
+            @PathVariable String convId) {
+        String username = extractUsername(token);
+        sessionManager.switchSession(username, convId);
+        return ResponseEntity.ok(Map.of("code", 200, "message", "Switched to session " + convId));
+    }
+
+    @DeleteMapping("/sessions/{convId}")
+    public ResponseEntity<?> deleteSession(
+            @RequestHeader("Authorization") String token,
+            @PathVariable String convId) {
+        String username = extractUsername(token);
+        sessionManager.deleteSession(username, convId);
+        return ResponseEntity.ok(Map.of("code", 200, "message", "Session deleted"));
+    }
+
+    private String extractUsername(String token) {
+        String username = jwtUtils.extractUsernameFromToken(token.replace("Bearer ", ""));
+        if (username == null || username.isEmpty()) {
+            throw new CustomException("无效的token", HttpStatus.UNAUTHORIZED);
+        }
+        return username;
+    }
+
     /**
      * 解析日期时间字符串，支持多种格式
      */

@@ -1,8 +1,26 @@
 import logging
 
 import fitz  # pymupdf
+import paddle.inference as paddle_infer
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from paddleocr import PaddleOCR
+
+# i7-1360P (13th-gen hybrid) has no AVX-512; SelfAttentionFusePass in Paddle 2.6
+# contains AVX-512 instructions that crash with SIGILL on this CPU family.
+# Intercept create_predictor and strip the offending pass before the engine builds.
+_orig_create_predictor = paddle_infer.create_predictor
+
+
+def _safe_create_predictor(config):
+    try:
+        config.delete_pass("self_attention_fuse_pass")
+    except Exception:
+        pass
+    return _orig_create_predictor(config)
+
+
+paddle_infer.create_predictor = _safe_create_predictor
+
+from paddleocr import PaddleOCR  # noqa: E402  must import after patch
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

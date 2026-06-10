@@ -36,6 +36,16 @@ public class EsDocument {
                      Integer parentChunkId, String parentContent,
                      float[] vector, String modelVersion,
                      String userId, String orgTag, boolean isPublic) {
+        this(id, fileMd5, chunkId, content, null, null, vector, modelVersion, userId, orgTag, isPublic);
+    }
+
+    /**
+     * 完整构造函数，包含父子分块信息
+     */
+    public EsDocument(String id, String fileMd5, int chunkId, String content,
+                     Integer parentChunkId, String parentContent,
+                     float[] vector, String modelVersion,
+                     String userId, String orgTag, boolean isPublic) {
         this(id, fileMd5, chunkId, content, vector, modelVersion, userId, orgTag, isPublic, null);
     }
 

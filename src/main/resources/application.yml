@@ -136,3 +136,11 @@ ai:
     temperature: 0.3
     max-tokens: 2000
     top-p: 0.9
+
+memory:
+  token-budget: 8192        # max tokens reserved for conversation history
+  context-window: 10        # recent messages always included verbatim
+  ltm-top-k: 3              # max facts injected per request
+  compress-threshold: 0.80  # trigger compression when usage > 80%
+  extract-every-n-rounds: 10 # incremental fact extraction interval
+  idle-timeout-minutes: 30  # session idle before fact extraction

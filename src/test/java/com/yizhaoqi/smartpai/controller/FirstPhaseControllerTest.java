@@ -11,6 +11,7 @@ import com.yizhaoqi.roboknow.repository.OrganizationTagRepository;
 import com.yizhaoqi.roboknow.repository.UserRepository;
 import com.yizhaoqi.roboknow.service.ChatHandler;
 import com.yizhaoqi.roboknow.service.DocumentService;
+import com.yizhaoqi.roboknow.service.SessionManager;
 import com.yizhaoqi.roboknow.service.FileTypeValidationService;
 import com.yizhaoqi.roboknow.service.HybridSearchService;
 import com.yizhaoqi.roboknow.service.UploadService;
@@ -52,6 +53,7 @@ class FirstPhaseControllerTest {
     private DocumentService documentService;
     private OrganizationTagRepository organizationTagRepository;
     private ChatHandler chatHandler;
+    private SessionManager sessionManager;
     private RedisTemplate<String, String> redisTemplate;
     private ValueOperations<String, String> valueOperations;
 
@@ -77,6 +79,8 @@ class FirstPhaseControllerTest {
         documentService = mock(DocumentService.class);
         organizationTagRepository = mock(OrganizationTagRepository.class);
         chatHandler = mock(ChatHandler.class);
+        sessionManager = mock(SessionManager.class);
+        when(sessionManager.getActiveConvId("session-1")).thenReturn("test-conv-id");
         redisTemplate = mock(RedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
@@ -104,7 +108,7 @@ class FirstPhaseControllerTest {
         ReflectionTestUtils.setField(documentController, "organizationTagRepository", organizationTagRepository);
         ReflectionTestUtils.setField(documentController, "jwtUtils", jwtUtils);
 
-        chatController = new ChatController(chatHandler);
+        chatController = new ChatController(chatHandler, sessionManager);
 
         conversationController = new ConversationController();
         ReflectionTestUtils.setField(conversationController, "redisTemplate", redisTemplate);
@@ -273,7 +277,7 @@ class FirstPhaseControllerTest {
 
         chatController.handleTextMessage(session, new TextMessage("hello"));
 
-        verify(chatHandler).processMessage("session-1", "hello", session);
+        verify(chatHandler).processMessage("session-1", "test-conv-id", "hello", session);
     }
 
     @Test

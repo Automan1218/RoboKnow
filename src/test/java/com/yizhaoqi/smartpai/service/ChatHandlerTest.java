@@ -20,9 +20,9 @@ class ChatHandlerTest {
 
         ChatHandler handler = new ChatHandler(reactAgentService, stopService);
 
-        handler.processMessage("alice", "hello", session);
+        handler.processMessage("alice", "conv-1", "hello", session);
 
-        verify(reactAgentService, timeout(1000)).processMessage("alice", "hello", session);
+        verify(reactAgentService, timeout(1000)).processMessage("alice", "conv-1", "hello", session);
     }
 
     @Test
