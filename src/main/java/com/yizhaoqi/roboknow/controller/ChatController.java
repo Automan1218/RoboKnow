@@ -2,6 +2,7 @@ package com.yizhaoqi.roboknow.controller;
 
 import com.yizhaoqi.roboknow.handler.ChatWebSocketHandler;
 import com.yizhaoqi.roboknow.service.ChatHandler;
+import com.yizhaoqi.roboknow.service.SessionManager;
 import com.yizhaoqi.roboknow.utils.LogUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -20,9 +21,11 @@ import java.util.Map;
 public class ChatController extends TextWebSocketHandler {
 
     private final ChatHandler chatHandler;
+    private final SessionManager sessionManager;
 
-    public ChatController(ChatHandler chatHandler) {
+    public ChatController(ChatHandler chatHandler, SessionManager sessionManager) {
         this.chatHandler = chatHandler;
+        this.sessionManager = sessionManager;
     }
 
     @Override
@@ -35,7 +38,8 @@ public class ChatController extends TextWebSocketHandler {
             LogUtils.logChat(userId, session.getId(), "USER_MESSAGE", userMessage.length());
             LogUtils.logBusiness("WEBSOCKET_CHAT", userId, "处理WebSocket聊天消息: messageLength=%d", userMessage.length());
             
-        chatHandler.processMessage(userId, userMessage, session);
+        String convId = sessionManager.getActiveConvId(userId);
+        chatHandler.processMessage(userId, convId, userMessage, session);
             
             LogUtils.logUserOperation(userId, "WEBSOCKET_CHAT", "message_processing", "SUCCESS");
             monitor.end("WebSocket消息处理成功");

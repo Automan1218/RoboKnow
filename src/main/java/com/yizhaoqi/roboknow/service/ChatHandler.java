@@ -11,10 +11,6 @@ import org.springframework.web.socket.WebSocketSession;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * 聊天调度层，保持轻量：只负责启动异步任务和处理停止指令。
- * 实际推理逻辑委托给 ReactAgentService。
- */
 @Service
 public class ChatHandler {
 
@@ -29,13 +25,10 @@ public class ChatHandler {
         this.agentStopService = agentStopService;
     }
 
-    /**
-     * 在独立线程中启动 ReAct Agent 处理流程，立即返回不阻塞 WebSocket 线程。
-     */
-    public void processMessage(String userId, String userMessage, WebSocketSession session) {
-        logger.info("ChatHandler 接收消息，用户: {}，会话: {}", userId, session.getId());
+    public void processMessage(String userId, String convId, String userMessage, WebSocketSession session) {
+        logger.info("ChatHandler 接收消息，用户: {}，convId: {}，会话: {}", userId, convId, session.getId());
         CompletableFuture.runAsync(() ->
-            reactAgentService.processMessage(userId, userMessage, session)
+            reactAgentService.processMessage(userId, convId, userMessage, session)
         ).exceptionally(ex -> {
             logger.error("ReactAgent 异步任务异常: {}", ex.getMessage(), ex);
             sendError(session, "处理消息时发生内部错误");
@@ -43,14 +36,10 @@ public class ChatHandler {
         });
     }
 
-    /**
-     * 处理停止指令，写入共享 stop flag，ReactAgentService 会在下一个检查点感知并中断。
-     */
     public void stopResponse(String userId, WebSocketSession session) {
         String sessionId = session.getId();
         logger.info("收到停止请求，用户: {}，会话: {}", userId, sessionId);
         agentStopService.requestStop(sessionId);
-
         try {
             Map<String, Object> response = Map.of(
                 "type", "stop",
@@ -66,8 +55,7 @@ public class ChatHandler {
 
     private void sendError(WebSocketSession session, String message) {
         try {
-            Map<String, String> err = Map.of("error", message);
-            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(err)));
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(Map.of("error", message))));
         } catch (Exception e) {
             logger.error("发送错误消息失败: {}", e.getMessage(), e);
         }
