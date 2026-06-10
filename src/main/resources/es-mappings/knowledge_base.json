@@ -12,6 +12,13 @@
         "analyzer": "english",
         "search_analyzer": "english"
       },
+      "parentChunkId": {
+        "type": "integer"
+      },
+      "parentContent": {
+        "type": "text",
+        "index": false
+      },
       "vector": {
         "type": "dense_vector",
         "dims": 2048,

@@ -46,8 +46,18 @@ public class ParseService {
     @Value("${file.parsing.chunk-overlap-size:0}")
     private int chunkOverlapSize;
 
-    @Value("${file.parsing.parent-chunk-size:0}")
-    private int parentChunkSize;
+    /**
+     * 父子分块开关。开启后：父块（chunk-size 大块，含重叠）作为喂给 LLM 的上下文，
+     * 子块（child-chunk-size 小块）作为向量化与召回匹配的单元。关闭则回退到原有纯子块逻辑。
+     */
+    @Value("${file.parsing.parent-child-enabled:true}")
+    private boolean parentChildEnabled;
+
+    /**
+     * 子块大小（父子分块）。应明显小于 chunk-size（父块大小），以提升召回精度。
+     */
+    @Value("${file.parsing.child-chunk-size:256}")
+    private int childChunkSize;
 
     @Value("${file.parsing.max-memory-threshold:0.8}")
     private double maxMemoryThreshold;
@@ -97,17 +107,17 @@ public class ParseService {
             return;
         }
 
-        int pSize = resolvedParentChunkSize();
-        List<String> parentTexts = splitTextIntoChunksWithSemantics(text, pSize);
-        List<Long> parentIds = saveParentChunks(fileMd5, parentTexts, userId, orgTag, isPublic);
-
-        int childIdx = 0;
-        for (int i = 0; i < parentTexts.size(); i++) {
-            List<String> children = splitTextIntoChunksWithSemantics(parentTexts.get(i), chunkSize);
-            childIdx = saveChildChunks(fileMd5, children, userId, orgTag, isPublic, childIdx, parentIds.get(i));
+        if (parentChildEnabled) {
+            List<ParentChildChunk> pcChunks = splitIntoParentChildChunks(text);
+            saveParentChildChunks(fileMd5, pcChunks, userId, orgTag, isPublic);
+            long parentCount = pcChunks.stream().map(c -> c.parentChunkId).distinct().count();
+            logger.info("文件解析完成(父子分块)，fileMd5: {}, 共 {} 个父块, {} 个子块",
+                    fileMd5, parentCount, pcChunks.size());
+        } else {
+            List<String> chunks = splitTextIntoChunksWithSemantics(text, chunkSize);
+            saveChildChunks(fileMd5, chunks, userId, orgTag, isPublic, 0);
+            logger.info("文件解析完成，fileMd5: {}, 共 {} 个chunks", fileMd5, chunks.size());
         }
-
-        logger.info("文件解析完成，fileMd5: {}, 父切片: {}, 子切片总数: {}", fileMd5, parentTexts.size(), childIdx);
     }
 
     /** Backward-compatible overload */
@@ -282,6 +292,75 @@ public class ParseService {
         return currentChunkId;
     }
 
+    /**
+     * 父子分块持久化：每个子块一行，反规范化携带其父块编号与父块完整文本。
+     * 子块 textContent 用于向量化与召回匹配；parentContent 用于召回后回溯喂给 LLM。
+     */
+    private void saveParentChildChunks(String fileMd5, List<ParentChildChunk> chunks,
+            String userId, String orgTag, boolean isPublic) {
+        int childId = 0;
+        for (ParentChildChunk chunk : chunks) {
+            childId++;
+            var vector = new DocumentVector();
+            vector.setFileMd5(fileMd5);
+            vector.setChunkId(childId);
+            vector.setTextContent(chunk.childContent);
+            vector.setParentChunkId(chunk.parentChunkId);
+            vector.setParentContent(chunk.parentContent);
+            vector.setUserId(userId);
+            vector.setOrgTag(orgTag);
+            vector.setPublic(isPublic);
+            documentVectorRepository.save(vector);
+        }
+        logger.info("成功保存 {} 个子切片(父子分块)到数据库", chunks.size());
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Parent-child chunking
+    // 父块（大、含重叠）保留上下文，子块（小、无重叠）提升召回精度。
+    // 召回时用子块匹配，回溯父块喂给 LLM。
+    // ─────────────────────────────────────────────────────────
+
+    /** 一个子块及其所属父块（反规范化携带父块全文）。 */
+    static final class ParentChildChunk {
+        final String childContent;
+        final int parentChunkId;
+        final String parentContent;
+
+        ParentChildChunk(String childContent, int parentChunkId, String parentContent) {
+            this.childContent = childContent;
+            this.parentChunkId = parentChunkId;
+            this.parentContent = parentContent;
+        }
+    }
+
+    /**
+     * 将全文切成父子两级：
+     * 1. 父块 = 复用原有语义分块（chunkSize 大小，带重叠），保证上下文完整。
+     * 2. 每个父块内再切成 childChunkSize 的子块（无重叠），作为向量化/召回单元。
+     * 子块为空时回退为整个父块本身，保证不丢内容。
+     */
+    List<ParentChildChunk> splitIntoParentChildChunks(String text) {
+        List<String> parents = splitTextIntoChunksWithSemantics(text, chunkSize);
+        List<ParentChildChunk> result = new ArrayList<>();
+
+        for (int p = 0; p < parents.size(); p++) {
+            String parent = parents.get(p);
+            int parentId = p + 1;
+
+            List<String> children = packSentencesIntoChunks(extractSentences(parent), childChunkSize);
+            if (children.isEmpty()) {
+                children = List.of(parent);
+            }
+            for (String child : children) {
+                if (!child.isBlank()) {
+                    result.add(new ParentChildChunk(child.trim(), parentId, parent));
+                }
+            }
+        }
+        return result;
+    }
+
     // ─────────────────────────────────────────────────────────
     // Semantic chunking
     // ─────────────────────────────────────────────────────────
@@ -290,6 +369,15 @@ public class ParseService {
         List<String> sentences = extractSentences(text);
         if (sentences.isEmpty()) return List.of();
 
+        List<String> chunks = packSentencesIntoChunks(sentences, chunkSize);
+        return applySemanticOverlap(chunks, chunkSize);
+    }
+
+    /**
+     * 贪心地把句子打包成不超过 chunkSize 的块（不加重叠）。
+     * 超长单句先按词切分。父子分块的父块与子块都复用此逻辑。
+     */
+    private List<String> packSentencesIntoChunks(List<String> sentences, int chunkSize) {
         List<String> chunks = new ArrayList<>();
         StringBuilder current = new StringBuilder();
 
@@ -312,7 +400,7 @@ public class ParseService {
             chunks.add(current.toString().trim());
         }
 
-        return applySemanticOverlap(chunks, chunkSize);
+        return chunks;
     }
 
     /**

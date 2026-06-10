@@ -44,12 +44,17 @@ public class VectorizationService {
 
             List<float[]> vectors = embeddingClient.embed(texts);
 
-            List<EsDocument> esDocuments = IntStream.range(0, childChunks.size())
+            // 构建 Elasticsearch 文档并存储
+            // 向量化的是子块内容（getContent），父块全文（parentContent）随文档一并存储，
+            // 供召回后回溯（small-to-big）喂给 LLM。
+            List<EsDocument> esDocuments = IntStream.range(0, chunks.size())
                     .mapToObj(i -> new EsDocument(
                             UUID.randomUUID().toString(),
                             fileMd5,
-                            childChunks.get(i).getChunkId(),
-                            childChunks.get(i).getTextContent(),
+                            chunks.get(i).getChunkId(),
+                            chunks.get(i).getContent(),
+                            chunks.get(i).getParentChunkId(),
+                            chunks.get(i).getParentContent(),
                             vectors.get(i),
                             "openai-text-embedding-3-large",
                             userId,
@@ -66,5 +71,27 @@ public class VectorizationService {
             logger.error("向量化失败，fileMd5: {}", fileMd5, e);
             throw new RuntimeException("向量化失败", e);
         }
+    }
+    
+
+    /**
+     * 获取文件分块内容
+     * @param fileMd5 文件指纹
+     * @return 分块内容列表
+     */
+    // 从数据库获取分块内容
+    private List<TextChunk> fetchTextChunks(String fileMd5) {
+        // 调用 Repository 查询数据
+        List<DocumentVector> vectors = documentVectorRepository.findByFileMd5(fileMd5);
+
+        // 转换为 TextChunk 列表（携带父子分块信息）
+        return vectors.stream()
+                .map(vector -> new TextChunk(
+                        vector.getChunkId(),
+                        vector.getTextContent(),
+                        vector.getParentChunkId(),
+                        vector.getParentContent()
+                ))
+                .toList();
     }
 }
