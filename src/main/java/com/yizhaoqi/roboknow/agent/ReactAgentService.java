@@ -6,6 +6,8 @@ import com.yizhaoqi.roboknow.client.AiUsageMetadata;
 import com.yizhaoqi.roboknow.client.OpenAiClient;
 import com.yizhaoqi.roboknow.memory.MemoryManager;
 import com.yizhaoqi.roboknow.service.AgentStopService;
+import com.yizhaoqi.roboknow.service.SessionManager;
+import com.yizhaoqi.roboknow.repository.ConversationSessionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -39,18 +41,24 @@ public class ReactAgentService {
     private final AnswerGroundingService answerGroundingService;
     private final AgentStopService agentStopService;
     private final MemoryManager memoryManager;
+    private final SessionManager sessionManager;
+    private final ConversationSessionRepository sessionRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ReactAgentService(OpenAiClient openAiClient,
                               ToolRegistry toolRegistry,
                               AnswerGroundingService answerGroundingService,
                               AgentStopService agentStopService,
-                              MemoryManager memoryManager) {
+                              MemoryManager memoryManager,
+                              SessionManager sessionManager,
+                              ConversationSessionRepository sessionRepository) {
         this.openAiClient = openAiClient;
         this.toolRegistry = toolRegistry;
         this.answerGroundingService = answerGroundingService;
         this.agentStopService = agentStopService;
         this.memoryManager = memoryManager;
+        this.sessionManager = sessionManager;
+        this.sessionRepository = sessionRepository;
     }
 
     public void processMessage(String userId, String convId, String userMessage, WebSocketSession session) {
@@ -66,6 +74,12 @@ public class ReactAgentService {
 
             sendCompletionNotification(session);
             memoryManager.record(userId, convId, userMessage, finalAnswer);
+            // Generate title on first message (title still default)
+            sessionRepository.findById(convId).ifPresent(s -> {
+                if ("New conversation".equals(s.getTitle())) {
+                    sessionManager.generateTitleAsync(convId, userMessage);
+                }
+            });
             logger.info("ReactAgent done, user: {}, convId: {}", userId, convId);
         } catch (Exception e) {
             logger.error("ReactAgent failed: {}", e.getMessage(), e);

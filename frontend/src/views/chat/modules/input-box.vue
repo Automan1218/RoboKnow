@@ -22,6 +22,10 @@ watch(wsData, val => {
     window.setTimeout(() => {
       chatStore.refreshUsage();
     }, 400);
+    // Refresh session list after first message so title updates from "New conversation"
+    window.setTimeout(() => {
+      chatStore.loadSessions();
+    }, 3000);
     return;
   }
   if (data.error) {

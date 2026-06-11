@@ -1,5 +1,5 @@
 import { useWebSocket } from '@vueuse/core';
-import { fetchSessions, createSession, switchSession, deleteSession } from '@/service/api/conversation';
+import { createSession, deleteSession, fetchSessions, switchSession } from '@/service/api/conversation';
 
 const emptyUsageSummary = (): Api.AiUsage.Summary => ({
   promptTokens: 0,
@@ -38,15 +38,39 @@ export const useChatStore = defineStore(SetupStoreId.Chat, () => {
 
   const store = useAuthStore();
 
+  // WS URL 必须跟随当前登录 token：传响应式 URL，vueuse 的 autoConnect 会在 token
+  // 变化时自动断开旧连接并用新 URL 重连，避免切换账号后仍以旧账号身份聊天（越权）。
+  // token 为空（未登录/已登出）时 URL 为 undefined，useWebSocket 不会发起连接。
+  const wsUrl = computed(() => (store.token ? `/proxy-ws/chat/${store.token}` : undefined));
+
   const {
     status: wsStatus,
     data: wsData,
     send: _wsSend,
     open: wsOpen,
     close: wsClose
-  } = useWebSocket(`/proxy-ws/chat/${store.token}`, {
+  } = useWebSocket(wsUrl, {
     autoReconnect: true
   });
+
+  // 登出（含切换账号前的登出）时清空上一个账号的会话与用量状态，防止跨账号串数据。
+  // 仅在 token 清空时清理：无感刷新（setToken）只换 token 不登出，不能打断进行中的会话。
+  watch(
+    () => store.token,
+    token => {
+      if (token) return;
+      list.value = [];
+      sessions.value = [];
+      activeConvId.value = '';
+      conversationId.value = '';
+      input.value = { message: '' };
+      totalUsage.value = emptyUsageSummary();
+      sessionUsage.value = emptyUsageSummary();
+      currentTurnUsage.value = null;
+      currentTurnBaseline.value = null;
+      sessionBaseline.value = null;
+    }
+  );
 
   /** Send JSON message with convId so backend routes to the correct session */
   function wsSend(message: string) {

@@ -20,6 +20,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(ChatWebSocketHandler.class);
     private static final String INTERNAL_CMD_TOKEN = "WSS_STOP_CMD_" + System.currentTimeMillis() % 1000000;
+    private static final String ATTR_USERNAME = "ws_username";
+    private static final String ATTR_TOKEN = "ws_token";
 
     private final ChatHandler chatHandler;
     private final SessionManager sessionManager;
@@ -36,18 +38,50 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
-        String userId = extractUserId(session);
-        sessions.put(userId, session);
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        String token = extractToken(session);
+
+        // 必须走完整校验（签名 + 过期 + Redis 黑名单/缓存）：登出后的旧 token、
+        // 被踢下线的 token 在这里直接拒绝，防止用残留 token 以他人身份建立连接
+        if (token == null || !jwtUtils.validateToken(token)) {
+            logger.warn("WebSocket连接被拒绝：token无效或已失效，sessionId={}, token={}",
+                    session.getId(), maskToken(token));
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("Invalid or expired token"));
+            return;
+        }
+
+        String username = jwtUtils.extractUsernameFromToken(token);
+        if (username == null) {
+            logger.warn("WebSocket连接被拒绝：无法从token中提取用户名，sessionId={}, token={}",
+                    session.getId(), maskToken(token));
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("Invalid token"));
+            return;
+        }
+
+        session.getAttributes().put(ATTR_USERNAME, username);
+        session.getAttributes().put(ATTR_TOKEN, token);
+        sessions.put(username, session);
         // Migrate old Redis key on first connection for existing users
-        sessionManager.migrateOldKeyIfPresent(userId);
-        logger.info("WebSocket connected userId={} sessionId={} uri={}",
-                userId, session.getId(), session.getUri().getPath());
+        sessionManager.migrateOldKeyIfPresent(username);
+        logger.info("WebSocket connected userId={} sessionId={}", username, session.getId());
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String userId = extractUserId(session);
+        if (userId == null) {
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("Unauthenticated session"));
+            return;
+        }
+
+        // 长连接期间 token 可能被登出/全设备登出拉黑，每条消息复查一次（仅 Redis 查询，开销可忽略）
+        String token = (String) session.getAttributes().get(ATTR_TOKEN);
+        if (token == null || !jwtUtils.validateToken(token)) {
+            logger.warn("WebSocket消息被拒绝：token已失效，用户ID: {}，会话ID: {}", userId, session.getId());
+            session.close(CloseStatus.POLICY_VIOLATION.withReason("Token expired or revoked"));
+            return;
+        }
+
         try {
             String payload = message.getPayload();
             logger.info("接收到消息，用户ID: {}，会话ID: {}，消息长度: {}",
@@ -96,7 +130,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String userId = extractUserId(session);
-        sessions.remove(userId);
+        if (userId != null) {
+            sessions.remove(userId);
+        }
         logger.info("WebSocket连接已关闭，用户ID: {}，会话ID: {}，状态: {}",
                 userId, session.getId(), status);
     }
@@ -115,17 +151,28 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         return sessionManager.getActiveConvId(userId);
     }
 
+    /** 身份只在握手时验证一次并存入 session attributes，未通过握手验证的连接拿不到身份 */
     private String extractUserId(WebSocketSession session) {
+        Object username = session.getAttributes().get(ATTR_USERNAME);
+        return username != null ? username.toString() : null;
+    }
+
+    private String extractToken(WebSocketSession session) {
+        if (session.getUri() == null) {
+            return null;
+        }
         String path = session.getUri().getPath();
         String[] segments = path.split("/");
-        String jwtToken = segments[segments.length - 1];
-        String username = jwtUtils.extractUsernameFromToken(jwtToken);
-        if (username == null) {
-            logger.warn("无法从JWT令牌中提取用户名，使用令牌作为用户ID: {}", jwtToken);
-            return jwtToken;
+        String token = segments.length > 0 ? segments[segments.length - 1] : null;
+        return token != null && !token.isBlank() ? token : null;
+    }
+
+    /** 日志脱敏：JWT 是凭证，完整值不能落日志 */
+    private String maskToken(String token) {
+        if (token == null || token.length() <= 10) {
+            return "***";
         }
-        logger.debug("从JWT令牌中提取的用户名: {}", username);
-        return username;
+        return token.substring(0, 10) + "...";
     }
 
     private void sendError(WebSocketSession session, String errorMessage) {

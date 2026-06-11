@@ -208,35 +208,57 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.12</version>
-                <configuration>
-                    <includes>
-                        <include>com/yizhaoqi/roboknow/controller/AuthController*</include>
-                        <include>com/yizhaoqi/roboknow/controller/UserController*</include>
-                        <include>com/yizhaoqi/roboknow/controller/UploadController*</include>
-                        <include>com/yizhaoqi/roboknow/controller/DocumentController*</include>
-                        <include>com/yizhaoqi/roboknow/controller/SearchController*</include>
-                        <include>com/yizhaoqi/roboknow/controller/ChatController*</include>
-                        <include>com/yizhaoqi/roboknow/controller/ConversationController*</include>
-                        <include>com/yizhaoqi/roboknow/service/FileTypeValidationService*</include>
-                        <include>com/yizhaoqi/roboknow/service/ConversationService*</include>
-                        <include>com/yizhaoqi/roboknow/service/ChatHandler*</include>
-                        <include>com/yizhaoqi/roboknow/model/User*</include>
-                        <include>com/yizhaoqi/roboknow/model/FileUpload*</include>
-                        <include>com/yizhaoqi/roboknow/entity/SearchResult*</include>
-                    </includes>
-                    <rules>
-                        <rule>
-                            <element>BUNDLE</element>
-                            <limits>
-                                <limit>
-                                    <counter>LINE</counter>
-                                    <value>COVEREDRATIO</value>
-                                    <minimum>0.50</minimum>
-                                </limit>
-                            </limits>
-                        </rule>
-                    </rules>
-                </configuration>
+                <executions>
+                    <!-- Instrument JVM before tests run -->
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <!-- Generate HTML/XML report after tests -->
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                    <!-- Enforce 80% threshold during verify -->
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals><goal>check</goal></goals>
+                        <configuration>
+                            <includes>
+                                <!-- Controllers with comprehensive unit tests -->
+                                <include>com/yizhaoqi/roboknow/controller/AuthController*</include>
+                                <include>com/yizhaoqi/roboknow/controller/UserController*</include>
+                                <include>com/yizhaoqi/roboknow/controller/SearchController*</include>
+                                <include>com/yizhaoqi/roboknow/controller/ChatController*</include>
+                                <include>com/yizhaoqi/roboknow/controller/ConversationController*</include>
+                                <include>com/yizhaoqi/roboknow/controller/AiUsageController*</include>
+                                <!-- Services with comprehensive unit tests -->
+                                <include>com/yizhaoqi/roboknow/service/FileTypeValidationService*</include>
+                                <include>com/yizhaoqi/roboknow/service/ConversationService*</include>
+                                <include>com/yizhaoqi/roboknow/service/ChatHandler*</include>
+                                <include>com/yizhaoqi/roboknow/service/AiTokenUsageService*</include>
+                                <!-- Models and entities -->
+                                <include>com/yizhaoqi/roboknow/model/User*</include>
+                                <include>com/yizhaoqi/roboknow/model/FileUpload*</include>
+                                <include>com/yizhaoqi/roboknow/entity/SearchResult*</include>
+                            </includes>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

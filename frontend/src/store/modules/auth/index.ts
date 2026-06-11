@@ -50,6 +50,11 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
     authStore.$reset();
 
+    // $reset 恢复的是 store 创建时的快照：如果应用加载时已处于登录态，
+    // 快照里的 token 不为空，会把旧 token "复活"。这里显式清空，
+    // 同时触发 chat store 对 token 的 watch，断开旧身份的 WebSocket。
+    authStore.token = '';
+
     if (!route.meta.constant) {
       await toLogin();
     }
