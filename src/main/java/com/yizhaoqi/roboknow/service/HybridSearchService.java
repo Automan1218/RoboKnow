@@ -13,9 +13,15 @@ import com.yizhaoqi.roboknow.model.FileUpload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
@@ -49,6 +55,14 @@ public class HybridSearchService {
 
     @Autowired
     private FileUploadRepository fileUploadRepository;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    @Value("${search.embedding-cache.ttl-seconds:300}")
+    private long embeddingCacheTtlSeconds;
+
+    private static final String EMBEDDING_CACHE_PREFIX = "search:embedding:";
 
     /**
      * 使用文本匹配和向量相似度进行混合搜索，支持权限过滤
@@ -301,9 +315,26 @@ public class HybridSearchService {
     }
 
     /**
-     * 生成查询向量，返回 List<Float>，失败时返回 null
+     * 生成查询向量，返回 List<Float>，失败时返回 null。
+     *
+     * 查询文本 -> 向量的映射与用户/权限无关（同一句 query 无论谁来问，向量都一样），
+     * 所以只缓存向量本身，不缓存最终检索结果——权限过滤永远基于当前请求的用户实时
+     * 跑在 ES 那一层，不会因为缓存而把 A 用户的私有文档结果泄露给 B 用户。
+     * 命中缓存直接省掉一次外部 embedding API 往返（真实压测里这是检索延迟的大头）。
      */
+    @SuppressWarnings("unchecked")
     private List<Float> embedToVectorList(String text) {
+        String cacheKey = EMBEDDING_CACHE_PREFIX + md5Hex(text);
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached instanceof List<?> cachedList) {
+                logger.debug("查询向量缓存命中: query={}", text);
+                return (List<Float>) cachedList;
+            }
+        } catch (Exception e) {
+            logger.warn("读取查询向量缓存失败，回退到实时生成: {}", e.getMessage());
+        }
+
         try {
             List<float[]> vecs = embeddingClient.embed(List.of(text));
             if (vecs == null || vecs.isEmpty()) {
@@ -315,10 +346,32 @@ public class HybridSearchService {
             for (float v : raw) {
                 list.add(v);
             }
+
+            try {
+                redisTemplate.opsForValue().set(cacheKey, list, Duration.ofSeconds(embeddingCacheTtlSeconds));
+            } catch (Exception e) {
+                logger.warn("写入查询向量缓存失败（不影响本次搜索）: {}", e.getMessage());
+            }
+
             return list;
         } catch (Exception e) {
             logger.error("生成向量失败", e);
             return null;
+        }
+    }
+
+    private String md5Hex(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(text.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            // MD5 是 JDK 标配算法，不会真的抛出；兜底用 hashCode 避免编译期异常处理负担
+            return Integer.toHexString(text.hashCode());
         }
     }
     
