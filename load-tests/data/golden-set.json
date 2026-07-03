@@ -1,0 +1,72 @@
+[
+  {
+    "query": "Redis 位图如何跟踪文件分片上传状态",
+    "relevantFileMd5s": ["0cc1ad2692e0cf5abbb29a28467650ee", "943f3a2fd54fbf0c281ef6e5560c1d4c"],
+    "note": "语义型；US-29 Redis bitmap 750x improvement，来自 project-report.md / docx"
+  },
+  {
+    "query": "混合检索是如何结合 BM25 关键词搜索和向量语义搜索的",
+    "relevantFileMd5s": ["0cc1ad2692e0cf5abbb29a28467650ee", "943f3a2fd54fbf0c281ef6e5560c1d4c"],
+    "note": "语义型；US-10 hybrid search"
+  },
+  {
+    "query": "ReAct Agent 的推理迭代次数上限是多少",
+    "relevantFileMd5s": ["0cc1ad2692e0cf5abbb29a28467650ee", "943f3a2fd54fbf0c281ef6e5560c1d4c"],
+    "note": "语义型；M3.2 up to 5 iterations"
+  },
+  {
+    "query": "Sprint 4 质量交付阶段的关键里程碑有哪些",
+    "relevantFileMd5s": ["0cc1ad2692e0cf5abbb29a28467650ee", "943f3a2fd54fbf0c281ef6e5560c1d4c"],
+    "note": "语义型；CI/CD, JaCoCo, OWASP"
+  },
+  {
+    "query": "users 表和 organization_tags 表的字段定义",
+    "relevantFileMd5s": ["e9ea2a03f824a48239b27413f57b8032"],
+    "note": "关键词型；ddl.sql schema，BM25 优势场景"
+  },
+  {
+    "query": "file_upload 表的唯一索引和外键约束",
+    "relevantFileMd5s": ["e9ea2a03f824a48239b27413f57b8032"],
+    "note": "关键词型；ddl.sql"
+  },
+  {
+    "query": "nginx 如何配置反向代理支持 WebSocket 连接升级",
+    "relevantFileMd5s": ["23e2f96277a7bab61a13b16a2d1b313d"],
+    "note": "关键词型；nginx.conf proxy_set_header Upgrade"
+  },
+  {
+    "query": "前端静态资源和 /api/ 请求的 nginx 转发规则",
+    "relevantFileMd5s": ["23e2f96277a7bab61a13b16a2d1b313d"],
+    "note": "关键词型；nginx.conf location 配置"
+  },
+  {
+    "query": "端到端 RAG pipeline 优化检索准确率提升了大约多少",
+    "relevantFileMd5s": ["085f197c926ae8f941d3e5aa69a18bbe"],
+    "note": "语义型；cv RAG pipeline ~20% retrieval accuracy improvement bullet（原查询假设的 5MB/MD5 措辞不在此 PDF 实际文本中，已替换为匹配真实内容的查询）"
+  },
+  {
+    "query": "简历里关于 Recall@10 和父子分块的项目经历",
+    "relevantFileMd5s": ["085f197c926ae8f941d3e5aa69a18bbe"],
+    "note": "语义型；cv parent-child chunking bullet"
+  },
+  {
+    "query": "第二次双周报告期间完成了哪些开发工作",
+    "relevantFileMd5s": ["e046caf1961f331c0b51a0cfbf93b818"],
+    "note": "语义型；Report 2: 24 Apr - 7 May 内容"
+  },
+  {
+    "query": "JWT 和 token 缓存设计遇到了什么困难，如何解决",
+    "relevantFileMd5s": ["e046caf1961f331c0b51a0cfbf93b818"],
+    "note": "语义型；Report 1 difficulties/solutions 章节"
+  },
+  {
+    "query": "generate_report.py 脚本的作用是什么",
+    "relevantFileMd5s": ["17519f3bc39a27456885934d00eb4e9f"],
+    "note": "关键词型；脚本 docstring 说明从 md 生成 docx"
+  },
+  {
+    "query": "组织标签的权限继承规则是怎样的",
+    "relevantFileMd5s": ["0cc1ad2692e0cf5abbb29a28467650ee", "943f3a2fd54fbf0c281ef6e5560c1d4c"],
+    "note": "语义型；3.3 Organisation Tag Model 权限规则"
+  }
+]
