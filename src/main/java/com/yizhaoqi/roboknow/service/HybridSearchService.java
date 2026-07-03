@@ -3,6 +3,7 @@ package com.yizhaoqi.roboknow.service;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.yizhaoqi.roboknow.client.EmbeddingClient;
+import com.yizhaoqi.roboknow.client.EmbeddingRequestBatcher;
 import com.yizhaoqi.roboknow.entity.EsDocument;
 import com.yizhaoqi.roboknow.entity.SearchResult;
 import com.yizhaoqi.roboknow.model.User;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -43,6 +45,9 @@ public class HybridSearchService {
 
     @Autowired
     private EmbeddingClient embeddingClient;
+
+    @Autowired
+    private EmbeddingRequestBatcher embeddingRequestBatcher;
 
     @Autowired
     private UserService userService;
@@ -336,12 +341,14 @@ public class HybridSearchService {
         }
 
         try {
-            List<float[]> vecs = embeddingClient.embed(List.of(text));
-            if (vecs == null || vecs.isEmpty()) {
+            // 缓存未命中：走批量合并器而不是直接单条调用 API。短 debounce 窗口内
+            // 并发涌入的、彼此不同的 query 会被打包成一次 API 调用，降低突发并发下
+            // 外部调用次数（跟上面的缓存互补：缓存解决"重复问"，这里解决"同时问不同问题"）。
+            float[] raw = embeddingRequestBatcher.requestEmbedding(text).get(30, TimeUnit.SECONDS);
+            if (raw == null || raw.length == 0) {
                 logger.warn("生成的向量为空");
                 return null;
             }
-            float[] raw = vecs.get(0);
             List<Float> list = new ArrayList<>(raw.length);
             for (float v : raw) {
                 list.add(v);
