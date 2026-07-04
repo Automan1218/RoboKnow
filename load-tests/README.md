@@ -70,18 +70,36 @@ k6 run -e CHAT_VUS=3 -e CHAT_ITERS=2 scenario6-chat-streaming.js
 
 结果：`chat_ttft`（首 token 延迟）、`chat_completion_time`（整轮耗时）、`chat_chunks_per_response`（流式分片数，>1 证明确实是流式而非一次性返回）。
 
-### 4. Recall@10 评测（A% → B%）
+### 4. Recall@10 评测（A% → B%，chunk 级 / 内容命中）
 
-1. 准备金标准集：编辑 `data/golden-set.json`，把每条 query 的 `relevantFileMd5s` 换成知识库中真实相关文档的 fileMd5（建议 ≥30 条查询，混合语义型与关键词型，否则数据没有说服力）
-2. 当前分支跑出 **B%**：
+评测判定的是"检索回来的文本块里是否真的包含答案"（`data/golden-set.json` 每条 query 标注
+`answerSpans`），而不是"相关文件是否出现在 top-10"。原因见 `scenario7-recall-eval.js` 顶部注释：
+小库 file 级判定会虚高到 100%。
+
+**必须先扩库，否则 top-10 没区分度、数字没意义：**
 
 ```bash
+# 1) 灌入标注文档（golden-set 引用的真实文件）
+python scripts/seed_docs.py
+
+# 2) 灌入 100~300 篇「不含任何 answerSpan」的干扰文档，把库撑到有区分度
+python scripts/seed_distractors.py --count 200
+```
+
+`seed_distractors.py` 会自动从 `golden-set.json` 收集 answerSpans 并剔除含答案的段落，
+保证干扰文档不污染 recall（与 `amplify_docs.py` 的区别）。**等 Kafka 解析+向量化完成**
+（检查 ES 文档数）后再评测：
+
+```bash
+# 当前分支（父子分块 + 混合检索）跑出 B%
 k6 run scenario7-recall-eval.js
 ```
 
-3. 切到 parent-child chunking / 混合检索改造前的基线分支，重建索引后用**同一份 golden-set** 再跑，得到 **A%**
+切到改造前的基线分支，用**同一批文档 + 同一份 golden-set** 再跑一次得到 **A%**。
 
-结果：`recall_at_10` 的 `avg` 即平均 Recall@10。
+结果：`recall_at_10` 的 `avg` 即平均 Recall@10；`hit_at_10` 为答案块被检索到的 query 占比。
+逐条 `[recall] ... HIT/MISS` 日志可看到具体哪条 query 没召回、命中了哪个 span——某条恒 MISS
+先检查该 query 的 answerSpans 是否与入库文本一致（PDF 源注意 fi/fl 连字丢字）。
 
 ### 5. Prompt token 消耗（C%）
 
