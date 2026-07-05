@@ -52,7 +52,7 @@ class ParentChildPersistenceIT {
         v.setFileMd5(MD5);
         v.setChunkId(1);
         v.setTextContent("Full Stack Intern Mar 2026 - Present");
-        v.setParentChunkId(7);
+        v.setParentChunkId(7L);
         v.setParentContent("RoboAct Pte Ltd. Full Stack Intern Mar 2026 - Present. ... Full Stack Intern Mar 2025 - Aug 2025.");
         v.setUserId("admin");
         v.setOrgTag("default");
@@ -64,7 +64,7 @@ class ParentChildPersistenceIT {
 
         DocumentVector loaded = repository.findById(id).orElseThrow();
         assertNotNull(loaded.getParentChunkId(), "parent_chunk_id 未落库");
-        assertEquals(7, loaded.getParentChunkId());
+        assertEquals(7L, loaded.getParentChunkId());
         assertTrue(loaded.getParentContent().contains("Mar 2026 - Present")
                 && loaded.getParentContent().contains("Mar 2025 - Aug 2025"),
                 "parent_content 未原样读回");
@@ -88,14 +88,14 @@ class ParentChildPersistenceIT {
         List<DocumentVector> rows = repository.findByFileMd5(MD5);
         assertEquals(3, rows.size(), "应查回 3 个子块");
 
-        Map<Integer, String> parents = rows.stream()
+        Map<Long, String> parents = rows.stream()
                 .collect(Collectors.toMap(
                         DocumentVector::getParentChunkId,
                         DocumentVector::getParentContent,
                         (a, b) -> a)); // 同父块取一份 → 去重
         assertEquals(2, parents.size(), "3 个子块应归并为 2 个父块");
-        assertTrue(parents.get(1).contains("Mar 2026 - Present")
-                && parents.get(1).contains("Mar 2025 - Aug 2025"),
+        assertTrue(parents.get(1L).contains("Mar 2026 - Present")
+                && parents.get(1L).contains("Mar 2025 - Aug 2025"),
                 "父块 1 应含两段实习");
     }
 
@@ -104,7 +104,7 @@ class ParentChildPersistenceIT {
         v.setFileMd5(MD5);
         v.setChunkId(chunkId);
         v.setTextContent(childText);
-        v.setParentChunkId(parentId);
+        v.setParentChunkId((long) parentId);
         v.setParentContent(parentText);
         v.setUserId("admin");
         v.setOrgTag("default");
