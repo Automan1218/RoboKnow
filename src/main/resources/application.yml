@@ -1,5 +1,6 @@
 server:
-  port: 8081 # 指定端口号
+  port: 8081
+
 spring:
   datasource:
     url: jdbc:mysql://localhost:3307/PaiSmart?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
@@ -21,11 +22,11 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: 50MB # 单个文件的最大大小
-      max-request-size: 100MB # 整个请求的最大大小
+      max-file-size: 50MB
+      max-request-size: 100MB
   kafka:
-    enabled: true  # 启用 Kafka
-    bootstrap-servers: 127.0.0.1:9092 # Kafka 服务器地址
+    enabled: true
+    bootstrap-servers: 127.0.0.1:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -36,22 +37,21 @@ spring:
       properties:
         client.dns.lookup: use_all_dns_ips
     consumer:
-      group-id: file-processing-group # 消费者组 ID
+      group-id: file-processing-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "*" # 允许反序列化的包
+        spring.json.trusted.packages: "*"
         client.dns.lookup: use_all_dns_ips
     topic:
-      file-processing: file-processing-topic1 # 新增的 Topic 配置
-      dlt: file-processing-dlt # 死信队列主题
+      file-processing: file-processing-topic1
+      dlt: file-processing-dlt
   webflux:
     client:
-      max-in-memory-size: 16MB  # 增加响应大小限制
+      max-in-memory-size: 16MB
   codec:
-    max-in-memory-size: 16MB    # 增加编解码大小限制
-
+    max-in-memory-size: 16MB
 
 minio:
   endpoint: http://localhost:19000
@@ -59,10 +59,10 @@ minio:
   secretKey: PaiSmart2025
   bucketName: uploads
   publicUrl: http://localhost:19000
+
 jwt:
   secret-key: "PXrQbuCwXwOZzkML/Vm2S5rSwt1iybvmKtGDzVEu+Hc="
 
-# 管理员账号初始化配置
 admin:
   username: admin
   password: admin123
@@ -71,26 +71,26 @@ admin:
 
 ocr:
   api:
-    url: http://localhost:8000   # PaddleOCR microservice
-    min-text-length: 100         # chars below which PDF is treated as image-based
-    timeout-seconds: 120         # max wait per document
+    url: http://localhost:8000
+    min-text-length: 100
+    timeout-seconds: 120
 
 file:
   parsing:
-    chunk-size: 1024 # 父块最大字符数（父子分块时作为喂给 LLM 的上下文块）
-    chunk-overlap-ratio: 0.1 # 相邻文本块重叠比例
-    parent-child-enabled: true # 父子分块开关：子块向量召回 + 父块上下文回溯
-    child-chunk-size: 256 # 子块最大字符数（向量化/召回单元，须明显小于 chunk-size）
-    buffer-size: 8192    # 8KB 缓冲区
-    max-memory-threshold: 0.8  # 80% 内存阈值
+    chunk-size: 1024
+    parent-chunk-size: 3072
+    chunk-overlap-ratio: 0.1
+    parent-child-enabled: true
+    child-chunk-size: 256
+    buffer-size: 8192
+    max-memory-threshold: 0.8
 
 elasticsearch:
-  host: localhost       # Elasticsearch主机地址
-  port: 9200            # Elasticsearch端口号
-  scheme: http          # 协议（http/https）
+  host: localhost
+  port: 9200
+  scheme: http
   username: elastic
   password: PaiSmart2025
-
 
 logging:
   level:
@@ -104,7 +104,7 @@ log4j:
   logger:
     org:
       apache:
-        tika=DEBUG:
+        tika: DEBUG
 
 openai:
   api:
@@ -117,8 +117,8 @@ embedding:
     url: https://api.openai.com/v1
     key: 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
     model: text-embedding-3-large
-    batch-size: 100  # OpenAI 单请求可放大（DashScope 旧限制为 10）
-    dimension: 2048  # 3-large 降维到 2048，对齐 ES dense_vector dims
+    batch-size: 100
+    dimension: 2048
 
 ai:
   prompt:
@@ -138,9 +138,9 @@ ai:
     top-p: 0.9
 
 memory:
-  token-budget: 8192        # max tokens reserved for conversation history
-  context-window: 10        # recent messages always included verbatim
-  ltm-top-k: 3              # max facts injected per request
-  compress-threshold: 0.80  # trigger compression when usage > 80%
-  extract-every-n-rounds: 10 # incremental fact extraction interval
-  idle-timeout-minutes: 30  # session idle before fact extraction
+  token-budget: 8192
+  context-window: 10
+  ltm-top-k: 3
+  compress-threshold: 0.80
+  extract-every-n-rounds: 10
+  idle-timeout-minutes: 30

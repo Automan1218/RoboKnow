@@ -9,13 +9,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface DocumentVectorRepository extends JpaRepository<DocumentVector, Long> {
-    List<DocumentVector> findByFileMd5(String fileMd5); // 查询某文件的所有分块
-    
-    /**
-     * 删除指定文件MD5的所有文档向量记录
-     * 
-     * @param fileMd5 文件MD5
-     */
+    List<DocumentVector> findByFileMd5(String fileMd5);
+
+    /** Returns only child chunks (isParent = false) for a given file. Used by VectorizationService. */
+    List<DocumentVector> findByFileMd5AndIsParentFalse(String fileMd5);
+
     @Transactional
     @Modifying
     @Query(value = "DELETE FROM document_vectors WHERE file_md5 = ?1", nativeQuery = true)

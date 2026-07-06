@@ -6,8 +6,10 @@ import com.yizhaoqi.roboknow.client.EmbeddingClient;
 import com.yizhaoqi.roboknow.client.EmbeddingRequestBatcher;
 import com.yizhaoqi.roboknow.entity.EsDocument;
 import com.yizhaoqi.roboknow.entity.SearchResult;
+import com.yizhaoqi.roboknow.model.DocumentVector;
 import com.yizhaoqi.roboknow.model.User;
 import com.yizhaoqi.roboknow.exception.CustomException;
+import com.yizhaoqi.roboknow.repository.DocumentVectorRepository;
 import com.yizhaoqi.roboknow.repository.UserRepository;
 import com.yizhaoqi.roboknow.repository.FileUploadRepository;
 import com.yizhaoqi.roboknow.model.FileUpload;
@@ -29,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Set;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -69,6 +72,9 @@ public class HybridSearchService {
 
     private static final String EMBEDDING_CACHE_PREFIX = "search:embedding:";
 
+    @Autowired
+    private DocumentVectorRepository documentVectorRepository;
+
     /**
      * 使用文本匹配和向量相似度进行混合搜索，支持权限过滤
      * 该方法确保用户只能搜索其有权限访问的文档（自己的文档、公开文档、所属组织的文档）
@@ -99,40 +105,47 @@ public class HybridSearchService {
                 return textOnlySearchWithPermission(query, userDbId, userEffectiveTags, topK);
             }
 
-            logger.debug("向量生成成功，开始执行 ANN+RRF 混合搜索");
+            logger.debug("向量生成成功，开始执行 BM25 + 向量 RRF 混合检索");
 
-            // 构建权限过滤查询（复用于 ANN filter 和 query filter）
+            // 构建权限过滤查询（复用于 KNN filter 和 BM25 filter）
             co.elastic.clients.elasticsearch._types.query_dsl.Query permissionFilter = buildPermissionFilter(userDbId, userEffectiveTags);
 
-            SearchResponse<EsDocument> response = esClient.search(s -> {
+            // 每一路多取候选，给 RRF 融合留出足够排名信息（业界 RRF 窗口惯例 50~100）
+            final int candidateSize = Math.max(topK * 10, 100);
+
+            // 第一路：向量近邻检索（ANN），捕捉语义相关
+            SearchResponse<EsDocument> annResponse = esClient.search(s -> {
                 s.index("knowledge_base");
                 s.knn(ann -> ann
                         .field("vector")
                         .queryVector(queryVector)
-                        .k(topK)
-                        .numCandidates(Math.max(topK * 4, 50))
+                        .k(candidateSize)
+                        .numCandidates(Math.max(candidateSize * 4, 100))
                         .filter(permissionFilter)
                 );
-                s.size(topK);
+                s.size(candidateSize);
                 return s;
             }, EsDocument.class);
 
-            logger.debug("Elasticsearch查询执行完成，命中数量: {}, 最大分数: {}",
-                response.hits().total().value(), response.hits().maxScore());
+            // 第二路：BM25 关键词检索，捕捉精确 token 匹配（同一权限过滤）
+            SearchResponse<EsDocument> bm25Response = esClient.search(s -> s
+                    .index("knowledge_base")
+                    .query(q -> q.bool(b -> b
+                            .must(m -> m.match(ma -> ma.field("textContent").query(query)))
+                            .filter(permissionFilter)))
+                    .size(candidateSize), EsDocument.class);
 
-            List<SearchResult> results = response.hits().hits().stream()
-                    .map(hit -> {
-                        assert hit.source() != null;
-                        logger.debug("搜索结果 - 文件: {}, 块: {}, 分数: {}, 内容: {}",
-                            hit.source().getFileMd5(), hit.source().getChunkId(), hit.score(),
-                            hit.source().getTextContent().substring(0, Math.min(50, hit.source().getTextContent().length())));
-                        return toSearchResult(hit.source(), hit.score());
-                    })
+            logger.debug("ANN 命中 {} 条，BM25 命中 {} 条，开始 RRF 融合",
+                    annResponse.hits().hits().size(), bm25Response.hits().hits().size());
+
+            // Reciprocal Rank Fusion：按两路排名倒数加权融合，规避向量分与 BM25 分量纲不一致的问题
+            List<SearchResult> results = rrfFuse(annResponse, bm25Response, topK).stream()
                     .filter(result -> isSearchResultAccessible(result, userDbId, userEffectiveTags))
                     .toList();
 
-            logger.debug("返回搜索结果数量: {}", results.size());
+            logger.debug("RRF 融合后返回搜索结果数量: {}", results.size());
             attachFileNames(results);
+            fetchParentContexts(results);
             return results;
         } catch (Exception e) {
             logger.error("带权限的搜索失败", e);
@@ -230,6 +243,7 @@ public class HybridSearchService {
 
             logger.debug("返回纯文本搜索结果数量: {}", results.size());
             attachFileNames(results);
+            fetchParentContexts(results);
             return results;
         } catch (Exception e) {
             logger.error("纯文本搜索失败", e);
@@ -466,6 +480,43 @@ public class HybridSearchService {
         }));
     }
 
+    /** RRF 融合的排名衰减常数，行业惯例取 60。 */
+    private static final int RRF_K = 60;
+
+    /**
+     * Reciprocal Rank Fusion：对两路检索结果按排名倒数 1/(k+rank) 累加打分再排序。
+     * 用排名而非原始分数融合，天然规避向量余弦分与 BM25 分量纲不一致的问题。
+     * 同一子块以 fileMd5#chunkId 作为唯一键去重。
+     */
+    private List<SearchResult> rrfFuse(SearchResponse<EsDocument> annResp,
+            SearchResponse<EsDocument> bm25Resp, int topK) {
+        Map<String, Double> fused = new LinkedHashMap<>();
+        Map<String, EsDocument> docs = new LinkedHashMap<>();
+        accumulateRrf(annResp, fused, docs);
+        accumulateRrf(bm25Resp, fused, docs);
+
+        return fused.entrySet().stream()
+                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+                .limit(topK)
+                .map(e -> toSearchResult(docs.get(e.getKey()), e.getValue()))
+                .collect(Collectors.toList());
+    }
+
+    private void accumulateRrf(SearchResponse<EsDocument> resp,
+            Map<String, Double> fused, Map<String, EsDocument> docs) {
+        int rank = 1;
+        for (var hit : resp.hits().hits()) {
+            EsDocument src = hit.source();
+            if (src == null) {
+                continue;
+            }
+            String key = src.getFileMd5() + "#" + src.getChunkId();
+            fused.merge(key, 1.0 / (RRF_K + rank), Double::sum);
+            docs.putIfAbsent(key, src);
+            rank++;
+        }
+    }
+
     /**
      * 将 ES 命中（子块）转换为 SearchResult，携带父块信息用于 small-to-big 回溯。
      */
@@ -491,6 +542,26 @@ public class HybridSearchService {
         if (userEffectiveTags != null && result.getOrgTag() != null
                 && userEffectiveTags.contains(result.getOrgTag())) return true;
         return false;
+    }
+
+    private void fetchParentContexts(List<SearchResult> results) {
+        List<Long> parentIds = results.stream()
+                .map(SearchResult::getParentChunkId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        if (parentIds.isEmpty()) return;
+
+        Map<Long, String> parentTexts = documentVectorRepository.findAllById(parentIds)
+                .stream()
+                .collect(Collectors.toMap(DocumentVector::getVectorId, DocumentVector::getTextContent));
+
+        results.forEach(r -> {
+            if (r.getParentChunkId() != null) {
+                String ctx = parentTexts.get(r.getParentChunkId());
+                if (ctx != null) r.setContextText(ctx);
+            }
+        });
     }
 
     private void attachFileNames(List<SearchResult> results) {

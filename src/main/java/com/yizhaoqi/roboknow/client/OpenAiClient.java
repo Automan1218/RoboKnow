@@ -183,6 +183,9 @@ public class OpenAiClient {
 
             Object content = message.get("content");
             return content == null ? "" : content.toString();
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            logger.error("chatBlocking 调用失败: {} | body: {}", e.getMessage(), e.getResponseBodyAsString());
+            return "";
         } catch (Exception e) {
             logger.error("chatBlocking 调用失败: {}", e.getMessage(), e);
             return "";
