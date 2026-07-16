@@ -1061,18 +1061,38 @@ conversations                                                │
 
 **Indexes:** `INDEX(file_md5, chunk_index)`
 
-### 15.5 `conversations` Table
+### 15.5 `conversation_sessions` / `conversation_messages` Tables
+
+> Supersedes the earlier `conversations` (question/answer/summary-per-row) table, which had zero callers after the 2026-06-10 memory system refactor moved long-term memory to `user_memory_facts` and was dropped from the dev database on 2026-07-16.
+
+**`conversation_sessions`** — one row per chat session (title, lifecycle status). Session content itself lives in `conversation_messages` / Redis, not here.
+
+| Column | Data Type | Constraints | Description |
+|--------|-----------|-------------|-------------|
+| `id` | VARCHAR(36) | PK | UUID; doubles as the Redis `conversation:{id}` key |
+| `user_id` | VARCHAR(255) | NOT NULL | Username (matches Redis key convention) |
+| `title` | VARCHAR(100) | NULL | LLM-generated after first exchange |
+| `status` | ENUM('ACTIVE','ARCHIVED') | NOT NULL | Soft-delete via archive |
+| `created_at` | DATETIME | AUTO (CreationTimestamp) | |
+| `last_active_at` | DATETIME | AUTO (UpdateTimestamp) | Drives idle-session fact extraction |
+| `round_count` | INT | DEFAULT 0 | Rounds since last incremental fact extraction |
+
+**Indexes:** `INDEX(user_id)`, `INDEX(last_active_at)`
+
+**`conversation_messages`** — durable per-message store, added 2026-07-16 to fix chat history silently disappearing once the Redis-only `conversation:{id}` cache key hit its 7-day TTL. Redis remains the hot-read path; on a cache miss, `ConversationMemory.loadHistory()` falls back to this table and backfills Redis (cache-aside).
 
 | Column | Data Type | Constraints | Description |
 |--------|-----------|-------------|-------------|
 | `id` | BIGINT | PK, AUTO_INCREMENT | Surrogate key |
-| `user_id` | BIGINT | FK → users.id, NOT NULL | Conversation owner |
-| `question` | TEXT | NOT NULL | User's question text |
-| `answer` | TEXT | NOT NULL | AI-generated answer text |
-| `summary` | TEXT | NULL | One-sentence LTM summary (LLM-generated) |
-| `timestamp` | DATETIME | AUTO (CreationTimestamp) | Exchange time |
+| `conv_id` | VARCHAR(36) | NOT NULL | References `conversation_sessions.id` (no FK constraint — matches this schema's existing no-FK style) |
+| `seq` | INT | NOT NULL | Message order within the conversation, from 0 |
+| `role` | VARCHAR(20) | NOT NULL | `user` / `assistant` |
+| `content` | TEXT | NOT NULL | Message text |
+| `created_at` | DATETIME(6) | NOT NULL | |
 
-**Indexes:** `INDEX(user_id)`, `INDEX(timestamp)`
+**Indexes:** `INDEX(conv_id, seq)`
+
+**Write path:** `MemoryManager.record()` writes Redis synchronously, then fires `MessagePersistenceService.saveAsync()` (`@Async("memoryExecutor")`) — the durable write never blocks the chat response.
 
 ### 15.6 `organization_tags` Table
 
@@ -1518,13 +1538,17 @@ deploy.sh actions (on EC2):
 
 All unit tests run without any external infrastructure (pure JVM, Mockito mocks).
 
-#### 19.1.1 `ConversationServiceTest`
+#### 19.1.1 `MessagePersistenceServiceTest` / `ConversationMemoryTest` / `MemoryManagerTest`
+
+> Replaces `ConversationServiceTest` (removed 2026-07-16 along with the dead `ConversationService` it tested — see §15.5).
 
 | Test Method | Given | When | Then |
 |-------------|-------|------|------|
-| `testRecordConversation` | User exists in repo; repo save mocked | `recordConversation("user", "Q", "A", "summary")` | `conversationRepository.save()` called once with correct Conversation entity |
-| `testGetRecentSummaries` | 3 conversations in repo with non-null summaries | `getRecentSummaries("user", 3)` | Returns list of 3 summary strings in descending timestamp order |
-| `testGetRecentSummaries_userNotFound` | User not in repo | `getRecentSummaries("unknown", 3)` | Returns empty list (no exception) |
+| `MessagePersistenceServiceTest.saveAsyncPersistsUserThenAssistantWithIncrementingSeq` | Repo mock, `countByConvId` returns 4 | `saveAsync(convId, question, answer)` | Saves 2 rows, `seq`=4 then 5, roles `user`/`assistant` |
+| `MessagePersistenceServiceTest.loadFromDbMapsRowsToRoleContentTimestamp` | Repo returns 1 `ConversationMessage` row | `loadFromDb(convId)` | Returns `role`/`content`/`timestamp` map matching Redis history JSON shape |
+| `ConversationMemoryTest.loadHistoryReturnsRedisDataWithoutTouchingDb` | Redis has the history key | `loadHistory(convId)` | Returns parsed Redis JSON; DB never queried |
+| `ConversationMemoryTest.loadHistoryFallsBackToDbOnRedisMissAndBackfillsRedis` | Redis miss, DB has history | `loadHistory(convId)` | Returns DB rows; Redis `set()` called to backfill (cache-aside) |
+| `MemoryManagerTest.recordTriggersDurableWrite` | All collaborators mocked | `record(userId, convId, q, a)` | `messagePersistenceService.saveAsync()` called with the same args |
 
 #### 19.1.2 `ParseServiceUnitTest`
 
@@ -1620,6 +1644,8 @@ All tests executed with **k6 v2.0.0** against a locally running stack (Spring Bo
 | 1 — Login throughput | 50 | 60 s | 232 ms | 0.00% | ⚠ p95 target missed |
 | 2 — Hybrid search | 20 | 120 s | 375 ms | 0.00% | ✅ Pass |
 | 3 — WebSocket chat | 10 | 5 min | — | 0.00% | ✅ Pass |
+| 4 — Recall@10 eval | 1 | ~55 s | — (quality metric, not latency) | 0.00% | ✅ 78.6% → 100% (2026-07-03); ⚠ not reproducible 2026-07-16, see below |
+| 5 — Token usage ON/OFF | 1 | ~2×18 turns | — | 0.00% | ⚠ inconclusive — memory ON used *more* tokens in this run |
 
 ---
 
@@ -1701,6 +1727,50 @@ All tests executed with **k6 v2.0.0** against a locally running stack (Spring Bo
 | Session duration (avg) | 4 m 55 s |
 
 **Analysis:** All WebSocket connections established successfully. 600 messages received against 120 sent reflects streaming token responses from the LLM (multiple chunks per query). No unexpected disconnects occurred during the 5-minute test window. All thresholds pass.
+
+---
+
+#### Scenario 4 — Recall@10 Retrieval Quality (`scenario7-recall-eval.js`)
+
+Not a load test — a retrieval-quality eval. 1 VU runs a 14-query golden set (`load-tests/data/golden-set.json`) sequentially against `GET /api/v1/search/hybrid?topK=10`, computing `recall@10 = hits / labeled-relevant-docs` per query.
+
+| Run | Date | Branch state | `recall_at_10` avg | `hit_at_10` | `http_req_duration` avg | Source |
+|---|---|---|---|---|---|---|
+| Baseline | 2026-07-03 | Pre parent-child chunking / hybrid RRF | **78.6%** | 78.6% (11/14) | 756 ms | `load-tests/data/recall-baseline-result.json` |
+| Current (as of 2026-07-03) | 2026-07-03 | Post parent-child chunking / hybrid RRF | **100%** | 100% (14/14) | 734 ms | `load-tests/data/recall-current-result.json` |
+
+**This is the real basis for the "Recall@10 79% → 100%" figure**, and the methodology is sound: same golden set, same eval script, run before and after the retrieval refactor (commit `17308e9`, "parent-child chunking + hybrid RRF retrieval"), on real indexed documents with human-labeled relevant `fileMd5`s.
+
+**2026-07-16 re-verification attempt:** re-ran `scenario7-recall-eval.js` against the current branch (same golden set, same 7 indexed documents, confirmed still present via `file_upload`) to reconfirm reproducibility. Result: **recall_at_10 avg = 32.1%**, `http_req_duration` avg = 3.67 s — both far worse than the recorded 100%/734 ms. Root-caused via backend logs, not a code regression:
+
+```
+ERROR c.y.roboknow.client.EmbeddingClient - 调用向量化 API 失败: Retries exhausted: 3/3
+Caused by: WebClientResponseException$Unauthorized: 401 Unauthorized from POST https://api.openai.com/v1/embeddings
+```
+
+The dev environment's OpenAI API key (`application.yml` → `embedding.api.key`) is currently rejected with 401. Every query falls back to `HybridSearchService`'s "向量生成失败，仅使用文本匹配进行搜索" (BM25-only) path — the golden set's semantic-type queries (Redis bitmap design, ReAct iteration limits, org-tag inheritance rules, etc. — labeled `"note": "语义型"` in `golden-set.json`) have no literal keyword overlap with their relevant documents and score 0 without vector search. The 3.67 s average is three embedding-call retries (with backoff) per query before falling back, not a search-latency regression.
+
+**Verdict:** the 79%→100% figure is real and well-evidenced, but **not currently re-reproducible in this environment** until the embedding API key is replaced. The recall drop and latency spike observed on 2026-07-16 are an artifact of that expired/invalid credential, not of any code change made that day (which touched only the conversation-history persistence layer — see §15.5 — and never the search/embedding path).
+
+---
+
+#### Scenario 5 — Prompt Token Consumption, Memory ON vs OFF (`scenario8-token-usage.js`, `conv18-memoryON.log` / `conv18-memoryOFF.log`)
+
+**Methodology note (from the script's own comments):** an earlier attempt compared prompt-token usage across two git commits (memory system before/after) and concluded that approach was a **"伪命题" (false premise)** — an 8-turn conversation never reaches the `memory.context-window=10` compression trigger, so the comparison mostly measured noise (LTM injection is a fixed per-call overhead; the compression saving hadn't fired yet). The corrected methodology, run entirely on current code: keep the branch fixed, toggle `memory.*` config, and run an 18-turn scripted conversation (long enough to cross the compression threshold) under each setting.
+
+- **OFF** (`context-window` set very large, `ltm-top-k=0` — degrades to "send full raw history every turn"): 62 LLM calls, **100,969** total prompt tokens
+- **ON** (default: `context-window=10`, `ltm-top-k=3` — compression + fact retrieval active): 62 LLM calls, **107,613** total prompt tokens
+
+**Verdict:** in this specific run, memory ON used **6.6% *more*** prompt tokens than OFF — the opposite of the CV bullet's "reducing token consumption during extended AI interactions" claim. Per-call curves for both settings are noisy (call-to-call token count swings 150–4,600 depending on how many ReAct tool calls that turn triggered), so this single run isn't conclusive either way, but it does not currently support the token-reduction claim. **This number should not be cited until re-tested** — likely needs a longer conversation (>18 turns, so compression fires more than once), fixing the tool-call-count confound the script's own comments flag, or multiple repeated runs averaged to cancel per-turn noise.
+
+---
+
+**On the "p95 latency 1300ms → 260ms" figure:** no valid supporting artifact for this exact claim was found in this repository. Two candidate files were checked and both are unsuitable as before/after evidence:
+
+- `baseline-conv-result.log`: `http_req_duration` p95 = **1.34 s**, but from a **single HTTP request** (`POST /api/v1/users/login`) — `baseline-token-driver.js` makes exactly one REST call per run; a p95 over n=1 is not a meaningful percentile.
+- `current-conv-result.log`: `http_req_duration` p95 = **246 ms** (avg 149 ms), but from **four different, lighter-weight REST calls** (login + create-session + two `GET /api/v1/ai/usage` calls) made by `scenario8-token-usage.js` — not the same endpoint, and not a larger sample either.
+
+Comparing these two is comparing different endpoints under different sample sizes, not a before/after measurement of the same operation — it does not support any latency-improvement claim. The one methodologically valid, load-tested p95 figure for the search path in this report is **Scenario 2** above: hybrid search under 20 concurrent VUs, p95 = **375 ms** against a 2,000 ms target (§19.3, no comparable "before" run was ever load-tested at the same concurrency). If the 1300 ms → 260 ms figure needs to stand behind a resume or report, it should be re-derived from a real controlled experiment — e.g., same code, same query, Redis embedding-cache cold vs warm (isolates exactly what commit `519226c` "cache query embeddings in Redis to cut hybrid search latency" changed) — run with a working embedding API key, which the current dev environment does not have (see Scenario 4 above).
 
 ---
 
