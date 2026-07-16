@@ -26,15 +26,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final ChatHandler chatHandler;
     private final SessionManager sessionManager;
     private final JwtUtils jwtUtils;
+    private final WebSocketSessionRegistry sessionRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final ConcurrentHashMap<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
     public ChatWebSocketHandler(ChatHandler chatHandler,
                                  SessionManager sessionManager,
-                                 JwtUtils jwtUtils) {
+                                 JwtUtils jwtUtils,
+                                 WebSocketSessionRegistry sessionRegistry) {
         this.chatHandler = chatHandler;
         this.sessionManager = sessionManager;
         this.jwtUtils = jwtUtils;
+        this.sessionRegistry = sessionRegistry;
     }
 
     @Override
@@ -60,7 +62,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         session.getAttributes().put(ATTR_USERNAME, username);
         session.getAttributes().put(ATTR_TOKEN, token);
-        sessions.put(username, session);
+        sessionRegistry.register(username, session);
         // Migrate old Redis key on first connection for existing users
         sessionManager.migrateOldKeyIfPresent(username);
         logger.info("WebSocket connected userId={} sessionId={}", username, session.getId());
@@ -131,7 +133,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String userId = extractUserId(session);
         if (userId != null) {
-            sessions.remove(userId);
+            sessionRegistry.unregister(userId);
         }
         logger.info("WebSocket连接已关闭，用户ID: {}，会话ID: {}，状态: {}",
                 userId, session.getId(), status);
