@@ -22,6 +22,7 @@ public class MemoryManager {
     private final MemoryRetriever memoryRetriever;
     private final ContextCompressor contextCompressor;
     private final ConversationSessionRepository sessionRepository;
+    private final MessagePersistenceService messagePersistenceService;
 
     @Value("${memory.context-window:10}")
     private int contextWindow;
@@ -33,12 +34,14 @@ public class MemoryManager {
                           LongTermMemory longTermMemory,
                           MemoryRetriever memoryRetriever,
                           ContextCompressor contextCompressor,
-                          ConversationSessionRepository sessionRepository) {
+                          ConversationSessionRepository sessionRepository,
+                          MessagePersistenceService messagePersistenceService) {
         this.conversationMemory = conversationMemory;
         this.longTermMemory = longTermMemory;
         this.memoryRetriever = memoryRetriever;
         this.contextCompressor = contextCompressor;
         this.sessionRepository = sessionRepository;
+        this.messagePersistenceService = messagePersistenceService;
     }
 
     /**
@@ -82,6 +85,8 @@ public class MemoryManager {
     public void record(String userId, String convId, String question, String answer) {
         List<Map<String, String>> evicted =
                 conversationMemory.appendAndEvictIfNeeded(convId, question, answer);
+
+        messagePersistenceService.saveAsync(convId, question, answer);
 
         if (!evicted.isEmpty()) {
             String existingSummary = conversationMemory.loadSummary(convId);
