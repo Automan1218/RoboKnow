@@ -1,8 +1,5 @@
 package com.yizhaoqi.roboknow.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.yizhaoqi.roboknow.exception.CustomException;
 import com.yizhaoqi.roboknow.model.ConversationSession;
 import com.yizhaoqi.roboknow.model.User;
@@ -40,9 +37,9 @@ public class ConversationController {
 
     @Autowired
     private JwtUtils jwtUtils;
-    
+
     @Autowired
-    private ObjectMapper objectMapper;
+    private com.yizhaoqi.roboknow.memory.ConversationMemory conversationMemory;
 
     /**
      * 查询对话历史，从Redis中获取
@@ -126,92 +123,81 @@ public class ConversationController {
      * 从Redis获取对话历史
      */
     private ResponseEntity<?> getConversationsFromRedis(String conversationId, String username, String start_date, String end_date, LogUtils.PerformanceMonitor monitor) {
-        // 从Redis获取对话历史
-        String key = "conversation:" + conversationId;
-        String json = redisTemplate.opsForValue().get(key);
-        
+        // Redis 命中直接返回；未命中由 ConversationMemory 回源 MySQL 并回填 Redis
+        List<Map<String, String>> history = conversationMemory.loadHistory(conversationId);
+
         List<Map<String, Object>> formattedConversations = new ArrayList<>();
-        if (json != null) {
-            try {
-                // 将原始Redis数据转换为前端可用的格式
-                List<Map<String, String>> history = objectMapper.readValue(json, 
-                        new TypeReference<List<Map<String, String>>>() {});
-                
-                // 解析时间范围
-                LocalDateTime startDateTime = null;
-                LocalDateTime endDateTime = null;
-                
-                if (start_date != null && !start_date.trim().isEmpty()) {
-                    try {
-                        startDateTime = parseDateTime(start_date);
-                        LogUtils.logBusiness("GET_CONVERSATIONS", username, "解析起始时间: %s -> %s", start_date, startDateTime);
-                    } catch (Exception e) {
-                        LogUtils.logBusinessError("GET_CONVERSATIONS", username, "起始时间解析失败: %s", e, start_date);
-                        throw new CustomException("起始时间格式错误: " + start_date, HttpStatus.BAD_REQUEST);
-                    }
+        if (!history.isEmpty()) {
+            // 解析时间范围
+            LocalDateTime startDateTime = null;
+            LocalDateTime endDateTime = null;
+
+            if (start_date != null && !start_date.trim().isEmpty()) {
+                try {
+                    startDateTime = parseDateTime(start_date);
+                    LogUtils.logBusiness("GET_CONVERSATIONS", username, "解析起始时间: %s -> %s", start_date, startDateTime);
+                } catch (Exception e) {
+                    LogUtils.logBusinessError("GET_CONVERSATIONS", username, "起始时间解析失败: %s", e, start_date);
+                    throw new CustomException("起始时间格式错误: " + start_date, HttpStatus.BAD_REQUEST);
                 }
-                
-                if (end_date != null && !end_date.trim().isEmpty()) {
-                    try {
-                        endDateTime = parseDateTime(end_date);
-                        LogUtils.logBusiness("GET_CONVERSATIONS", username, "解析结束时间: %s -> %s", end_date, endDateTime);
-                    } catch (Exception e) {
-                        LogUtils.logBusinessError("GET_CONVERSATIONS", username, "结束时间解析失败: %s", e, end_date);
-                        throw new CustomException("结束时间格式错误: " + end_date, HttpStatus.BAD_REQUEST);
-                    }
-                }
-                
-                // 将对话转换为前端需要的格式，使用存储的时间戳并进行时间过滤
-                for (Map<String, String> message : history) {
-                    String messageTimestamp = message.getOrDefault("timestamp", "未知时间");
-                    
-                    // 时间过滤
-                    if (startDateTime != null || endDateTime != null) {
-                        if (!"未知时间".equals(messageTimestamp)) {
-                            try {
-                                LocalDateTime messageDateTime = LocalDateTime.parse(messageTimestamp, 
-                                    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
-                                
-                                // 检查是否在时间范围内
-                                if (startDateTime != null && messageDateTime.isBefore(startDateTime)) {
-                                    continue; // 跳过早于起始时间的消息
-                                }
-                                if (endDateTime != null && messageDateTime.isAfter(endDateTime)) {
-                                    continue; // 跳过晚于结束时间的消息
-                                }
-                            } catch (Exception e) {
-                                // 时间戳格式不正确，跳过过滤（包含所有消息）
-                                LogUtils.logBusinessError("GET_CONVERSATIONS", username, "消息时间戳格式错误: %s", e, messageTimestamp);
-                            }
-                        }
-                        // 如果是"未知时间"且设置了时间过滤，跳过该消息
-                        else if (startDateTime != null || endDateTime != null) {
-                            continue;
-                        }
-                    }
-                    
-                    Map<String, Object> messageWithTimestamp = new HashMap<>();
-                    messageWithTimestamp.put("role", message.get("role"));
-                    messageWithTimestamp.put("content", message.get("content"));
-                    messageWithTimestamp.put("timestamp", messageTimestamp);
-                    formattedConversations.add(messageWithTimestamp);
-                }
-                
-                LogUtils.logBusiness("GET_CONVERSATIONS", username, "从Redis中获取到 %d 条对话记录，过滤后剩余 %d 条，会话ID: %s", 
-                        history.size(), formattedConversations.size(), conversationId);
-                LogUtils.logUserOperation(username, "GET_CONVERSATIONS", "conversation_history", "SUCCESS");
-                monitor.end("获取对话历史成功");
-            } catch (JsonProcessingException e) {
-                LogUtils.logBusinessError("GET_CONVERSATIONS", username, "解析对话历史出错", e);
-                monitor.end("解析对话历史失败");
-                throw new CustomException("解析对话历史失败", HttpStatus.INTERNAL_SERVER_ERROR);
             }
+
+            if (end_date != null && !end_date.trim().isEmpty()) {
+                try {
+                    endDateTime = parseDateTime(end_date);
+                    LogUtils.logBusiness("GET_CONVERSATIONS", username, "解析结束时间: %s -> %s", end_date, endDateTime);
+                } catch (Exception e) {
+                    LogUtils.logBusinessError("GET_CONVERSATIONS", username, "结束时间解析失败: %s", e, end_date);
+                    throw new CustomException("结束时间格式错误: " + end_date, HttpStatus.BAD_REQUEST);
+                }
+            }
+
+            // 将对话转换为前端需要的格式，使用存储的时间戳并进行时间过滤
+            for (Map<String, String> message : history) {
+                String messageTimestamp = message.getOrDefault("timestamp", "未知时间");
+
+                // 时间过滤
+                if (startDateTime != null || endDateTime != null) {
+                    if (!"未知时间".equals(messageTimestamp)) {
+                        try {
+                            LocalDateTime messageDateTime = LocalDateTime.parse(messageTimestamp,
+                                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"));
+
+                            // 检查是否在时间范围内
+                            if (startDateTime != null && messageDateTime.isBefore(startDateTime)) {
+                                continue; // 跳过早于起始时间的消息
+                            }
+                            if (endDateTime != null && messageDateTime.isAfter(endDateTime)) {
+                                continue; // 跳过晚于结束时间的消息
+                            }
+                        } catch (Exception e) {
+                            // 时间戳格式不正确，跳过过滤（包含所有消息）
+                            LogUtils.logBusinessError("GET_CONVERSATIONS", username, "消息时间戳格式错误: %s", e, messageTimestamp);
+                        }
+                    }
+                    // 如果是"未知时间"且设置了时间过滤，跳过该消息
+                    else if (startDateTime != null || endDateTime != null) {
+                        continue;
+                    }
+                }
+
+                Map<String, Object> messageWithTimestamp = new HashMap<>();
+                messageWithTimestamp.put("role", message.get("role"));
+                messageWithTimestamp.put("content", message.get("content"));
+                messageWithTimestamp.put("timestamp", messageTimestamp);
+                formattedConversations.add(messageWithTimestamp);
+            }
+
+            LogUtils.logBusiness("GET_CONVERSATIONS", username, "获取到 %d 条对话记录，过滤后剩余 %d 条，会话ID: %s",
+                    history.size(), formattedConversations.size(), conversationId);
+            LogUtils.logUserOperation(username, "GET_CONVERSATIONS", "conversation_history", "SUCCESS");
+            monitor.end("获取对话历史成功");
         } else {
-            LogUtils.logBusiness("GET_CONVERSATIONS", username, "会话ID %s 在Redis中找不到对应的历史记录", conversationId);
+            LogUtils.logBusiness("GET_CONVERSATIONS", username, "会话ID %s 没有对应的历史记录", conversationId);
             LogUtils.logUserOperation(username, "GET_CONVERSATIONS", "conversation_history", "SUCCESS_EMPTY");
             monitor.end("获取对话历史成功（空结果）");
         }
-        
+
         // 构建统一响应格式
         Map<String, Object> response = new HashMap<>();
         response.put("code", 200);

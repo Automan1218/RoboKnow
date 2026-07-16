@@ -1,6 +1,5 @@
 package com.yizhaoqi.roboknow.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yizhaoqi.roboknow.model.ConversationSession;
 import com.yizhaoqi.roboknow.model.User;
 import com.yizhaoqi.roboknow.repository.UserRepository;
@@ -28,6 +27,7 @@ class ConversationControllerTest {
     private JwtUtils jwtUtils;
     private UserRepository userRepository;
     private ValueOperations<String, String> ops;
+    private com.yizhaoqi.roboknow.memory.ConversationMemory conversationMemory;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -36,6 +36,7 @@ class ConversationControllerTest {
         sessionManager = mock(SessionManager.class);
         jwtUtils = mock(JwtUtils.class);
         userRepository = mock(UserRepository.class);
+        conversationMemory = mock(com.yizhaoqi.roboknow.memory.ConversationMemory.class);
 
         RedisTemplate<String, String> redisTemplate = mock(RedisTemplate.class);
         ops = mock(ValueOperations.class);
@@ -46,7 +47,7 @@ class ConversationControllerTest {
         ReflectionTestUtils.setField(controller, "jwtUtils", jwtUtils);
         ReflectionTestUtils.setField(controller, "userRepository", userRepository);
         ReflectionTestUtils.setField(controller, "redisTemplate", redisTemplate);
-        ReflectionTestUtils.setField(controller, "objectMapper", new ObjectMapper());
+        ReflectionTestUtils.setField(controller, "conversationMemory", conversationMemory);
     }
 
     private void stubValidToken(String username) {
@@ -91,14 +92,12 @@ class ConversationControllerTest {
     }
 
     @Test
-    void getConversationsReturnsMessagesFromRedisActiveKey() {
+    void getConversationsReturnsMessagesFromConversationMemory() {
         stubValidToken("alice");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(buildUser(1L, "alice")));
-
-        // active_conversation key returns a convId
         when(ops.get("user:1:active_conversation")).thenReturn("conv-abc");
-        String json = "[{\"role\":\"user\",\"content\":\"hello\",\"timestamp\":\"2026-06-11T10:00:00\"}]";
-        when(ops.get("conversation:conv-abc")).thenReturn(json);
+        when(conversationMemory.loadHistory("conv-abc")).thenReturn(
+                List.of(Map.of("role", "user", "content", "hello", "timestamp", "2026-06-11T10:00:00")));
 
         ResponseEntity<?> r = controller.getConversations("Bearer valid", null, null);
         assertEquals(200, r.getStatusCode().value());
@@ -111,13 +110,9 @@ class ConversationControllerTest {
         stubValidToken("alice");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(buildUser(1L, "alice")));
         when(ops.get("user:1:active_conversation")).thenReturn("conv-abc");
-
-        // Two messages: one before cutoff, one after
-        String json = "[" +
-                "{\"role\":\"user\",\"content\":\"old\",\"timestamp\":\"2026-01-01T10:00:00\"}," +
-                "{\"role\":\"user\",\"content\":\"new\",\"timestamp\":\"2026-06-11T10:00:00\"}" +
-                "]";
-        when(ops.get("conversation:conv-abc")).thenReturn(json);
+        when(conversationMemory.loadHistory("conv-abc")).thenReturn(List.of(
+                Map.of("role", "user", "content", "old", "timestamp", "2026-01-01T10:00:00"),
+                Map.of("role", "user", "content", "new", "timestamp", "2026-06-11T10:00:00")));
 
         ResponseEntity<?> r = controller.getConversations(
                 "Bearer valid", "2026-06-01", "2026-06-30");
@@ -132,18 +127,18 @@ class ConversationControllerTest {
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(buildUser(1L, "alice")));
         when(ops.get("user:1:active_conversation")).thenReturn(null);
         when(ops.get("user:1:current_conversation")).thenReturn("conv-legacy");
-        when(ops.get("conversation:conv-legacy")).thenReturn(null); // empty history
+        when(conversationMemory.loadHistory("conv-legacy")).thenReturn(List.of());
 
         ResponseEntity<?> r = controller.getConversations("Bearer valid", null, null);
         assertEquals(200, r.getStatusCode().value());
     }
 
     @Test
-    void getConversationsReturnsEmptyWhenRedisDataIsNull() {
+    void getConversationsReturnsEmptyWhenHistoryIsEmpty() {
         stubValidToken("alice");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(buildUser(1L, "alice")));
         when(ops.get("user:1:active_conversation")).thenReturn("conv-abc");
-        when(ops.get("conversation:conv-abc")).thenReturn(null);
+        when(conversationMemory.loadHistory("conv-abc")).thenReturn(List.of());
 
         ResponseEntity<?> r = controller.getConversations("Bearer valid", null, null);
         assertEquals(200, r.getStatusCode().value());
