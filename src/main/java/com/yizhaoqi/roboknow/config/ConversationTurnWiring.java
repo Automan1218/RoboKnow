@@ -6,6 +6,7 @@ import com.yizhaoqi.roboknow.model.ConversationSession;
 import com.yizhaoqi.roboknow.model.ConversationTurn;
 import com.yizhaoqi.roboknow.repository.ConversationSessionRepository;
 import com.yizhaoqi.roboknow.repository.ConversationTurnRepository;
+import com.yizhaoqi.roboknow.service.ConversationCommandService;
 import com.yizhaoqi.roboknow.service.ConversationTurnCompletionService;
 import com.yizhaoqi.roboknow.service.ConversationTurnDispatcher;
 import jakarta.annotation.PostConstruct;
@@ -36,6 +37,7 @@ public class ConversationTurnWiring {
     private final ConversationTurnDispatcher dispatcher;
     private final ConversationTurnRepository turnRepository;
     private final ConversationSessionRepository sessionRepository;
+    private final ConversationCommandService commandService;
     private final ConversationTurnCompletionService completionService;
     private final ReactAgentService reactAgentService;
     private final WebSocketSessionRegistry sessionRegistry;
@@ -43,12 +45,14 @@ public class ConversationTurnWiring {
     public ConversationTurnWiring(ConversationTurnDispatcher dispatcher,
                                    ConversationTurnRepository turnRepository,
                                    ConversationSessionRepository sessionRepository,
+                                   ConversationCommandService commandService,
                                    ConversationTurnCompletionService completionService,
                                    ReactAgentService reactAgentService,
                                    WebSocketSessionRegistry sessionRegistry) {
         this.dispatcher = dispatcher;
         this.turnRepository = turnRepository;
         this.sessionRepository = sessionRepository;
+        this.commandService = commandService;
         this.completionService = completionService;
         this.reactAgentService = reactAgentService;
         this.sessionRegistry = sessionRegistry;
@@ -58,7 +62,10 @@ public class ConversationTurnWiring {
     void wire() {
         dispatcher.setProcessor(this::drainAllPending);
 
-        int recovered = turnRepository.resetOrphanedProcessingTurnsToPending();
+        // 跨 bean 调用 ConversationCommandService.recoverOrphanedProcessingTurns()（而不是
+        // 直接调本类里的 repository @Modifying 方法）：@PostConstruct 阶段没有活跃事务，
+        // @Modifying 查询必须经过一个真正被 Spring 事务代理包裹的方法调用才能执行。
+        int recovered = commandService.recoverOrphanedProcessingTurns();
         if (recovered > 0) {
             logger.warn("Recovered {} PROCESSING turn(s) orphaned by a previous crash, reset to PENDING", recovered);
         }

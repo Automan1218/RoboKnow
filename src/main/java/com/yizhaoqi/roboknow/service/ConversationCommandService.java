@@ -78,4 +78,17 @@ public class ConversationCommandService {
         logger.info("Accepted turn convId={} turnSeq={} requestId={}", convId, turnSeq, requestId);
         return new TurnAccepted(turnSeq, requestId, ConversationTurn.Status.PENDING);
     }
+
+    /**
+     * 启动恢复：重置上次崩溃残留的 PROCESSING turn。放在这里（而不是让
+     * ConversationTurnWiring 的 @PostConstruct 直接调用 repository）是因为 @Modifying
+     * 查询需要一个活跃事务——同一个类里 @PostConstruct 方法内部直接调用本类的
+     * @Transactional 方法会绕过 Spring AOP 代理、事务不生效，必须是这种跨 bean 调用。
+     *
+     * @return 被重置的 turn 数量
+     */
+    @Transactional
+    public int recoverOrphanedProcessingTurns() {
+        return turnRepository.resetOrphanedProcessingTurnsToPending();
+    }
 }
