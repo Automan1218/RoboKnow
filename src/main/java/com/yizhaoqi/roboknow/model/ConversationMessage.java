@@ -7,9 +7,11 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "conversation_messages", indexes = {
-        @Index(name = "idx_conv_seq", columnList = "conv_id,seq")
-})
+@Table(name = "conversation_messages",
+        uniqueConstraints = @UniqueConstraint(name = "uk_conv_seq", columnNames = {"conv_id", "seq"}),
+        indexes = {
+                @Index(name = "idx_conv_seq", columnList = "conv_id,seq")
+        })
 public class ConversationMessage {
 
     @Id
