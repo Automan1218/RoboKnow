@@ -20,6 +20,20 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
 
     boolean existsByConvIdAndStatusIn(String convId, List<ConversationTurn.Status> statuses);
 
+    /** 周期安全网用：找出当前有 PENDING turn 的 convId，唤醒它们的 dispatcher，兜住 submit() 的漏 wake 窗口。 */
+    @Query("SELECT DISTINCT t.convId FROM ConversationTurn t WHERE t.status = 'PENDING'")
+    List<String> findDistinctConvIdsWithPendingTurns();
+
+    /**
+     * 启动恢复用：进程崩溃时可能有 turn 卡在 PROCESSING（LLM 调用中途被杀）。全新进程实例
+     * 不可能是它的持有者，重置回 PENDING 让 dispatcher 重新处理。回答从未提交（completeIfOwned
+     * 会把状态改成 COMPLETE），所以重置不会丢失或重复已提交的回答。
+     */
+    @Modifying
+    @Query("UPDATE ConversationTurn t SET t.status = 'PENDING', t.attemptToken = NULL, " +
+           "t.retryCount = t.retryCount + 1 WHERE t.status = 'PROCESSING'")
+    int resetOrphanedProcessingTurnsToPending();
+
     @Modifying
     @Query("UPDATE ConversationTurn t SET t.status = 'PROCESSING', t.attemptToken = :attemptToken, " +
            "t.startedAt = CURRENT_TIMESTAMP WHERE t.id = :id AND t.status = 'PENDING'")

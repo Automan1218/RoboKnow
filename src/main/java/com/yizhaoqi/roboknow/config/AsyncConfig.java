@@ -26,4 +26,20 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * turn 处理是关键任务，不能像 memoryExecutor 那样静默丢弃——队列满时用 CallerRunsPolicy
+     * 让提交线程自己执行，宁可短暂阻塞也不丢消息。
+     */
+    @Bean(name = "turnWorkerExecutor")
+    public Executor turnWorkerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("turn-worker-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
 }
