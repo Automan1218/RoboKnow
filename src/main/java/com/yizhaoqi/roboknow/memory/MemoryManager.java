@@ -104,4 +104,28 @@ public class MemoryManager {
             sessionRepository.save(session);
         });
     }
+
+    /**
+     * turn 化流程专用：MySQL 落库已经由 ConversationTurnCompletionService 完成，
+     * 这里只负责 Redis STM 热缓存 append + 压缩触发 + LTM 增量抽取，不重复写 DB。
+     */
+    public void syncRedisAfterTurnComplete(String userId, String convId, String question, String answer) {
+        List<Map<String, String>> evicted =
+                conversationMemory.appendAndEvictIfNeeded(convId, question, answer);
+
+        if (!evicted.isEmpty()) {
+            String existingSummary = conversationMemory.loadSummary(convId);
+            contextCompressor.compressAsync(convId, existingSummary);
+        }
+
+        sessionRepository.findById(convId).ifPresent(session -> {
+            session.setRoundCount(session.getRoundCount() + 1);
+            if (session.getRoundCount() % extractEveryNRounds == 0) {
+                logger.debug("Incremental fact extraction at round={} for convId={}",
+                        session.getRoundCount(), convId);
+                contextCompressor.extractFactsAsync(userId, convId);
+            }
+            sessionRepository.save(session);
+        });
+    }
 }

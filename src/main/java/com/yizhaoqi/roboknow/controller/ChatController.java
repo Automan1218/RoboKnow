@@ -1,55 +1,26 @@
 package com.yizhaoqi.roboknow.controller;
 
 import com.yizhaoqi.roboknow.handler.ChatWebSocketHandler;
-import com.yizhaoqi.roboknow.service.ChatHandler;
-import com.yizhaoqi.roboknow.service.SessionManager;
 import com.yizhaoqi.roboknow.utils.LogUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.Map;
 
+/**
+ * 曾经 extends TextWebSocketHandler 并重写 handleTextMessage，但从未被注册为实际的
+ * WebSocket handler（真正接 /chat/{token} 的是 WebSocketConfig 里的 chatWebSocketHandler），
+ * 那段代码永远不会被调用——2026-07-16 随 ChatHandler.processMessage 一起删除。
+ * 这个类现在只承担 /websocket-token 这一个真实的 REST 端点。
+ */
 @Component
 @RestController
 @RequestMapping("/api/v1/chat")
-public class ChatController extends TextWebSocketHandler {
+public class ChatController {
 
-    private final ChatHandler chatHandler;
-    private final SessionManager sessionManager;
-
-    public ChatController(ChatHandler chatHandler, SessionManager sessionManager) {
-        this.chatHandler = chatHandler;
-        this.sessionManager = sessionManager;
-    }
-
-    @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        String userMessage = message.getPayload();
-        String userId = session.getId(); // Use session ID as userId for simplicity
-        
-        LogUtils.PerformanceMonitor monitor = LogUtils.startPerformanceMonitor("WEBSOCKET_CHAT");
-        try {
-            LogUtils.logChat(userId, session.getId(), "USER_MESSAGE", userMessage.length());
-            LogUtils.logBusiness("WEBSOCKET_CHAT", userId, "处理WebSocket聊天消息: messageLength=%d", userMessage.length());
-            
-        String convId = sessionManager.getActiveConvId(userId);
-        chatHandler.processMessage(userId, convId, userMessage, session);
-            
-            LogUtils.logUserOperation(userId, "WEBSOCKET_CHAT", "message_processing", "SUCCESS");
-            monitor.end("WebSocket消息处理成功");
-        } catch (Exception e) {
-            LogUtils.logBusinessError("WEBSOCKET_CHAT", userId, "WebSocket消息处理失败", e);
-            monitor.end("WebSocket消息处理失败: " + e.getMessage());
-            throw e;
-        }
-    }
-    
     /**
      * 获取WebSocket停止指令Token
      */

@@ -6,6 +6,7 @@ import com.yizhaoqi.roboknow.client.AiUsageMetadata;
 import com.yizhaoqi.roboknow.client.OpenAiClient;
 import com.yizhaoqi.roboknow.memory.MemoryManager;
 import com.yizhaoqi.roboknow.service.AgentStopService;
+import com.yizhaoqi.roboknow.service.ConversationTurnCompletionService;
 import com.yizhaoqi.roboknow.service.SessionManager;
 import com.yizhaoqi.roboknow.repository.ConversationSessionRepository;
 import org.slf4j.Logger;
@@ -43,6 +44,7 @@ public class ReactAgentService {
     private final MemoryManager memoryManager;
     private final SessionManager sessionManager;
     private final ConversationSessionRepository sessionRepository;
+    private final ConversationTurnCompletionService turnCompletionService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ReactAgentService(OpenAiClient openAiClient,
@@ -51,7 +53,8 @@ public class ReactAgentService {
                               AgentStopService agentStopService,
                               MemoryManager memoryManager,
                               SessionManager sessionManager,
-                              ConversationSessionRepository sessionRepository) {
+                              ConversationSessionRepository sessionRepository,
+                              ConversationTurnCompletionService turnCompletionService) {
         this.openAiClient = openAiClient;
         this.toolRegistry = toolRegistry;
         this.answerGroundingService = answerGroundingService;
@@ -59,10 +62,21 @@ public class ReactAgentService {
         this.memoryManager = memoryManager;
         this.sessionManager = sessionManager;
         this.sessionRepository = sessionRepository;
+        this.turnCompletionService = turnCompletionService;
     }
 
-    public void processMessage(String userId, String convId, String userMessage, WebSocketSession session) {
-        logger.info("ReactAgent processing message, user: {}, convId: {}", userId, convId);
+    /**
+     * 处理已经被 ConversationCommandService 落库为 PENDING、并被 dispatcher claim 为
+     * PROCESSING 的一个 turn。ReAct 循环里的 THINKING/ACTING/OBSERVING 事件照常实时推送
+     * （那是打字机效果之前的过程性 UI，不涉及“回答是否已经落库”）。
+     * 关键变化：finalAnswer 算出来之后，先同步提交 MySQL（turn COMPLETE + assistant 消息），
+     * 提交成功才做打字机效果推送和 completion 通知——这样即使推送过程中连接断开，
+     * 回答本身已经落库，客户端重连后能从历史里读到，不会丢失也不会重复生成。
+     */
+    public void processTurn(String userId, String convId, int turnSeq, String requestId,
+                             Long turnId, String attemptToken, String userMessage,
+                             WebSocketSession session) {
+        logger.info("ReactAgent processing turn, user: {}, convId: {}, turnSeq: {}", userId, convId, turnSeq);
         try {
             List<Map<String, String>> contextMessages =
                     memoryManager.loadContext(userId, convId, userMessage);
@@ -72,17 +86,27 @@ public class ReactAgentService {
 
             String finalAnswer = runReActLoop(ctx, contextMessages);
 
-            sendCompletionNotification(session);
-            memoryManager.record(userId, convId, userMessage, finalAnswer);
-            // Generate title on first message (title still default)
+            boolean committed = turnCompletionService.complete(turnId, attemptToken, convId, turnSeq, finalAnswer);
+            if (!committed) {
+                logger.warn("Turn commit skipped (stale attemptToken), not pushing result. convId={} turnSeq={}",
+                        convId, turnSeq);
+                return;
+            }
+
+            memoryManager.syncRedisAfterTurnComplete(userId, convId, userMessage, finalAnswer);
+
+            streamText(ctx.getSession(), finalAnswer);
+            sendCompletionNotification(ctx.getSession(), requestId, turnSeq);
+
             sessionRepository.findById(convId).ifPresent(s -> {
                 if ("New conversation".equals(s.getTitle())) {
                     sessionManager.generateTitleAsync(convId, userMessage);
                 }
             });
-            logger.info("ReactAgent done, user: {}, convId: {}", userId, convId);
+            logger.info("ReactAgent turn done, user: {}, convId: {}, turnSeq: {}", userId, convId, turnSeq);
         } catch (Exception e) {
-            logger.error("ReactAgent failed: {}", e.getMessage(), e);
+            logger.error("ReactAgent turn failed: {}", e.getMessage(), e);
+            turnCompletionService.markFailed(turnId, attemptToken, e.getClass().getSimpleName());
             sendError(session, "The AI service is temporarily unavailable. Please try again later.");
         } finally {
             agentStopService.clear(session.getId());
@@ -259,12 +283,14 @@ public class ReactAgentService {
         }
     }
 
-    private void sendCompletionNotification(WebSocketSession session) {
+    private void sendCompletionNotification(WebSocketSession session, String requestId, int turnSeq) {
         try {
             Map<String, Object> notification = new HashMap<>();
             notification.put("type", "completion");
             notification.put("status", "finished");
             notification.put("message", "Response completed");
+            notification.put("requestId", requestId);
+            notification.put("turnSeq", turnSeq);
             notification.put("timestamp", System.currentTimeMillis());
             notification.put("date", java.time.LocalDateTime.now().toString());
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(notification)));

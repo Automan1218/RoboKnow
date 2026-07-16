@@ -49,4 +49,12 @@ class MemoryManagerTest {
 
         verify(conversationMemory).appendAndEvictIfNeeded("conv-1", "question", "answer");
     }
+
+    @Test
+    void syncRedisAfterTurnCompleteAppendsToRedisButDoesNotDurablyPersist() {
+        manager.syncRedisAfterTurnComplete("alice", "conv-1", "question", "answer");
+
+        verify(conversationMemory).appendAndEvictIfNeeded("conv-1", "question", "answer");
+        verifyNoInteractions(messagePersistenceService);
+    }
 }

@@ -108,7 +108,7 @@ class FirstPhaseControllerTest {
         ReflectionTestUtils.setField(documentController, "organizationTagRepository", organizationTagRepository);
         ReflectionTestUtils.setField(documentController, "jwtUtils", jwtUtils);
 
-        chatController = new ChatController(chatHandler, sessionManager);
+        chatController = new ChatController();
 
         conversationMemory = mock(com.yizhaoqi.roboknow.memory.ConversationMemory.class);
 
@@ -270,16 +270,13 @@ class FirstPhaseControllerTest {
     }
 
     @Test
-    void chatControllerCoversHttpTokenAndWebSocketDispatch() throws Exception {
+    void chatControllerCoversHttpToken() {
+        // ChatController 的 handleTextMessage/WebSocket 分发路径 2026-07-16 已删除：
+        // 那个 TextWebSocketHandler 覆写从未被注册为实际 WebSocket handler（真正接
+        // /chat/{token} 的是 WebSocketConfig 里的 chatWebSocketHandler），是死代码。
+        // 现在的 ChatController 只剩 /websocket-token 这一个真实端点。
         ResponseEntity<?> token = chatController.getWebSocketToken();
         assertEquals(HttpStatus.OK, token.getStatusCode());
-
-        WebSocketSession session = mock(WebSocketSession.class);
-        when(session.getId()).thenReturn("session-1");
-
-        chatController.handleTextMessage(session, new TextMessage("hello"));
-
-        verify(chatHandler).processMessage("session-1", "test-conv-id", "hello", session);
     }
 
     @Test

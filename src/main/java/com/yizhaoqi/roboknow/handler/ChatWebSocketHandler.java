@@ -2,7 +2,10 @@ package com.yizhaoqi.roboknow.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yizhaoqi.roboknow.service.ChatHandler;
+import com.yizhaoqi.roboknow.service.ConversationCommandService;
+import com.yizhaoqi.roboknow.service.ConversationTurnDispatcher;
 import com.yizhaoqi.roboknow.service.SessionManager;
+import com.yizhaoqi.roboknow.service.TurnAccepted;
 import com.yizhaoqi.roboknow.utils.JwtUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +16,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
 @Component
 public class ChatWebSocketHandler extends TextWebSocketHandler {
@@ -27,16 +30,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final SessionManager sessionManager;
     private final JwtUtils jwtUtils;
     private final WebSocketSessionRegistry sessionRegistry;
+    private final ConversationCommandService commandService;
+    private final ConversationTurnDispatcher turnDispatcher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ChatWebSocketHandler(ChatHandler chatHandler,
                                  SessionManager sessionManager,
                                  JwtUtils jwtUtils,
-                                 WebSocketSessionRegistry sessionRegistry) {
+                                 WebSocketSessionRegistry sessionRegistry,
+                                 ConversationCommandService commandService,
+                                 ConversationTurnDispatcher turnDispatcher) {
         this.chatHandler = chatHandler;
         this.sessionManager = sessionManager;
         this.jwtUtils = jwtUtils;
         this.sessionRegistry = sessionRegistry;
+        this.commandService = commandService;
+        this.turnDispatcher = turnDispatcher;
     }
 
     @Override
@@ -103,11 +112,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         return;
                     }
 
-                    // Chat message with optional convId
+                    // Chat message with optional convId + requestId
                     String userMessage = (String) json.get("message");
                     if (userMessage != null && !userMessage.isBlank()) {
                         String convId = resolveConvId(userId, (String) json.get("convId"));
-                        chatHandler.processMessage(userId, convId, userMessage, session);
+                        String requestId = (String) json.get("requestId");
+                        acceptAndDispatch(userId, convId, requestId, userMessage, session);
                         return;
                     }
                     // Fall through to plain-text path if no "message" key
@@ -116,10 +126,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
             }
 
-            // Backward compat: plain text message (no convId)
+            // Backward compat: plain text message (no convId/requestId)
             if (!payload.isBlank()) {
                 String convId = sessionManager.getActiveConvId(userId);
-                chatHandler.processMessage(userId, convId, payload, session);
+                acceptAndDispatch(userId, convId, null, payload, session);
             }
 
         } catch (Exception e) {
@@ -144,6 +154,34 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     // ── private helpers ─────────────────────────────────────────────────────
+
+    /**
+     * 同步接受消息（分配 turnSeq、落 PENDING turn + user 消息），立即回 accepted 确认，
+     * 再唤醒该 convId 的串行 dispatcher。不在这里等回答生成——那部分完全异步，由
+     * ConversationTurnWiring/ReactAgentService 通过 WebSocketSessionRegistry 找回这个连接推送结果。
+     */
+    private void acceptAndDispatch(String userId, String convId, String requestId,
+                                    String userMessage, WebSocketSession session) {
+        String effectiveRequestId = (requestId == null || requestId.isBlank())
+                ? UUID.randomUUID().toString() : requestId;
+        TurnAccepted accepted = commandService.acceptMessage(userId, convId, effectiveRequestId, userMessage);
+        sendAccepted(session, accepted, convId);
+        turnDispatcher.submit(convId);
+    }
+
+    private void sendAccepted(WebSocketSession session, TurnAccepted accepted, String convId) {
+        try {
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(Map.of(
+                    "type", "accepted",
+                    "convId", convId,
+                    "requestId", accepted.requestId(),
+                    "turnSeq", accepted.turnSeq(),
+                    "status", accepted.status().name()
+            ))));
+        } catch (Exception e) {
+            logger.error("Failed to send accepted ack: {}", e.getMessage(), e);
+        }
+    }
 
     private String resolveConvId(String userId, String requestedConvId) {
         if (requestedConvId != null && !requestedConvId.isBlank()) {
