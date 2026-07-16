@@ -19,6 +19,8 @@ public interface ConversationSessionRepository extends JpaRepository<Conversatio
     Optional<ConversationSession> findTopByUserIdAndStatusOrderByLastActiveAtDesc(
             String userId, ConversationSession.Status status);
 
+    List<ConversationSession> findByStatusOrderByLastActiveAtDesc(ConversationSession.Status status);
+
     @Query("SELECT s FROM ConversationSession s WHERE s.status = 'ACTIVE' " +
            "AND s.lastActiveAt < :cutoff")
     List<ConversationSession> findIdleSessions(@Param("cutoff") LocalDateTime cutoff);

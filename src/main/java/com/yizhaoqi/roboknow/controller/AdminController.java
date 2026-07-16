@@ -1,8 +1,5 @@
 package com.yizhaoqi.roboknow.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yizhaoqi.roboknow.exception.CustomException;
 import com.yizhaoqi.roboknow.model.OrganizationTag;
 import com.yizhaoqi.roboknow.model.User;
@@ -12,7 +9,6 @@ import com.yizhaoqi.roboknow.service.UserService;
 import com.yizhaoqi.roboknow.utils.JwtUtils;
 import com.yizhaoqi.roboknow.utils.LogUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -41,10 +37,10 @@ public class AdminController {
     private OrganizationTagRepository organizationTagRepository;
     
     @Autowired
-    private RedisTemplate<String, String> redisTemplate;
-    
+    private com.yizhaoqi.roboknow.repository.ConversationSessionRepository sessionRepository;
+
     @Autowired
-    private ObjectMapper objectMapper;
+    private com.yizhaoqi.roboknow.memory.ConversationMemory conversationMemory;
 
     /**
      * 获取所有用户列表
@@ -452,33 +448,18 @@ public class AdminController {
                 }
             }
             
-            // 获取所有Redis键中以"user:"开头的键
-            Set<String> userKeys = redisTemplate.keys("user:*:current_conversation");
-            
-            if (userKeys != null && !userKeys.isEmpty()) {
-                for (String userKey : userKeys) {
-                    String conversationId = redisTemplate.opsForValue().get(userKey);
-                    if (conversationId != null) {
-                        // 提取用户ID
-                        String redisUserId = userKey.replace("user:", "").replace(":current_conversation", "");
-                        
-                        // 如果指定了userid，只查询该用户的对话
-                        if (userid != null && !userid.isEmpty()) {
-                            // 检查Redis中的用户ID是否匹配（可能是数字ID或用户名）
-                            if (!redisUserId.equals(userid) && !redisUserId.equals(targetUsername)) {
-                                continue;
-                            }
-                        }
-                        
-                        // 获取对话内容，使用实际的用户名而不是Redis中的ID
-                        String conversationKey = "conversation:" + conversationId;
-                        String json = redisTemplate.opsForValue().get(conversationKey);
-                        if (json != null) {
-                            String displayUsername = targetUsername != null ? targetUsername : redisUserId;
-                            processRedisConversation(json, allConversations, displayUsername, start_date, end_date);
-                        }
-                    }
-                }
+            List<com.yizhaoqi.roboknow.model.ConversationSession> sessions;
+            if (targetUsername != null) {
+                sessions = sessionRepository.findByUserIdAndStatusOrderByLastActiveAtDesc(
+                        targetUsername, com.yizhaoqi.roboknow.model.ConversationSession.Status.ACTIVE);
+            } else {
+                sessions = sessionRepository.findByStatusOrderByLastActiveAtDesc(
+                        com.yizhaoqi.roboknow.model.ConversationSession.Status.ACTIVE);
+            }
+
+            for (com.yizhaoqi.roboknow.model.ConversationSession session : sessions) {
+                List<Map<String, String>> history = conversationMemory.loadHistory(session.getId());
+                addHistoryToResult(history, allConversations, session.getUserId(), start_date, end_date);
             }
             
             LogUtils.logBusiness("ADMIN_GET_ALL_CONVERSATIONS", adminUsername, "管理员查询完成，共获取到 %d 条对话记录", allConversations.size());
@@ -504,12 +485,9 @@ public class AdminController {
     }
     
     /**
-     * 处理Redis中的对话数据
+     * 把已解析的历史消息按时间过滤后追加到结果列表，并附带用户名
      */
-    private void processRedisConversation(String json, List<Map<String, Object>> targetList, String username, String startDate, String endDate) throws JsonProcessingException {
-        List<Map<String, String>> history = objectMapper.readValue(json, 
-                new TypeReference<List<Map<String, String>>>() {});
-        
+    private void addHistoryToResult(List<Map<String, String>> history, List<Map<String, Object>> targetList, String username, String startDate, String endDate) {
         // 解析时间范围
         java.time.LocalDateTime startDateTime = null;
         java.time.LocalDateTime endDateTime = null;
