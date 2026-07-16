@@ -27,7 +27,7 @@
 | `scenario4-search-capacity.js` | 混合检索容量（开环 arrival-rate） | **[Y] QPS、p95 < [Z] ms** |
 | `scenario5-upload-chunked.js` | 5MB 分片上传 + 断点续传 + merge 全链路 | **[X GB] 级文件支撑、上传吞吐** |
 | `scenario6-chat-streaming.js` | Agent 流式对话（TTFT / 完成时长） | **流式输出与长任务可观测性佐证** |
-| `scenario7-recall-eval.js` | Recall@10 金标准评测 | **Recall@10 从 78.6% 到 100%**（2026-07-03 实测，见文末验证记录） |
+| `scenario7-recall-eval.js` | Recall@10 金标准评测（chunk 级 answerSpan 判定） | **Recall@10**（2026-07-03 的 78.6%→100% 是 file 级 7 文档小库数据，chunk 级正式数字待补，见文末验证记录） |
 | `scenario8-token-usage.js` | 每会话 prompt token 消耗 | **prompt tokens 降低 C%** |
 | `scenario9-search-cache-latency.js` | 同一 query 冷/热缓存 p95 对比 | **混合检索 p95 延迟改善（隔离 embedding 缓存这一个变量）** |
 
@@ -124,33 +124,32 @@ k6 run --out json=results/raw.json scenario4-search-capacity.js
 
 针对"Recall@10 从 79% 到 100%"和"p95 延迟从 1300ms 降到 260ms"两个数据做的复核，结论分开看：
 
-### Recall@10 79% → 100%：有真实数据支撑，方法论站得住
+### 先修正一个错误归因：401 不是 key 失效，是 profile 配置
 
-`data/recall-baseline-result.json`（2026-07-03，`recall_at_10.avg = 78.57%`，对应旧分支 pre 父子分块/混合 RRF）和 `data/recall-current-result.json`（同日，`avg = 100%`，对应 `17308e9` 之后）是同一份 `golden-set.json`、同一个评测脚本，在改造前后各跑一次的真实产出——数字站得住。
+当天最初把重跑失败（recall 32.1%、延迟 3.67s）归因为"`application.yml` 里的 OpenAI key 失效"。**这个归因是错的**：dashboard 显示 key 正常且有余额，直接 curl `/v1/embeddings` 也能通。真实原因是后端用 dev profile 启动，而 `application-dev.yml` 里写的是 `key: ${OPENAI_API_KEY:}`——环境变量占位符、默认值为空，**覆盖掉了** `application.yml` 里那个有效的 key，等于每次请求都带着空 token 出门。修法：启动前 `export OPENAI_API_KEY=...`。教训：embedding 凭证应该在启动时 fail-fast 校验，而不是每个请求静默重试 3 次然后悄悄降级成纯 BM25。
 
-2026-07-16 重跑复现时发现跑不出 100%（只有 32.1%），排查到是 dev 环境 OpenAI embedding API key 返回 401（`application.yml` 里那个 key 失效了），导致每次查询向量化重试 3 次全失败，退化成纯 BM25 关键词匹配——golden-set 里标了"语义型"的 query 全部脱靶。**不是代码回归**，跟当天做的会话历史持久化改动无关（那部分代码完全没碰检索链路）。换一个有效 key 之后应该能复现原始数字，但今天没法验证到底。
+### Recall@10 79% → 100%：原始数据真实，但方法论有已知缺陷，chunk 级重测被语料事故打断
 
-### p95 延迟 1300ms → 260ms：目前找不到有效证据
+`data/recall-baseline-result.json`（2026-07-03，78.57%，父子分块/混合 RRF 之前）和 `data/recall-current-result.json`（同日，100%，`17308e9` 之后）确是同脚本、同 golden-set 的前后对照真实产出。**但当时全库只有 7 个文档**，file 级判定 + topK=10 在这种体量下几乎必中——`feature/recall-eval-chunk-level` 分支自己就批评这是"虚高"，并给出 chunk 级 answerSpan 方法论 + 200 篇不含答案的干扰语料。本目录的 `scenario7-recall-eval.js` 已换成 chunk 级版本。
 
-翻了仓库里所有压测产出，最接近这两个数字的是 `baseline-conv-result.log`（p95=1.34s）和 `current-conv-result.log`（p95=246ms），但这两个文件**不能拿来做前后对比**：
+**语料污染事故：** chunk 级首次重跑得到 0%，深挖后确认既不是代码回归也不是排序 bug——库里混进了 `amplify_docs.py` 为 QPS 压测生成的 200 篇"synthetic variant"（把 project-report.md 的段落洗牌重组，脚本头部自己写明"只用于 QPS，不用于 recall 评测"）。答案段落被复制了 90+ 份（ES 实测：answerSpan "Redis bitmap" 出现在 94 个文件 / 593 个 chunk 里，其中 92 个是克隆），按 fileMd5 判相关等于"在 90 份原文克隆里找出原件"，数学上必输。处理：克隆全删，改用 `seed_distractors.py`（剔除含 answerSpan 的段落 + 上传前二次校验）灌干扰语料。**铁律：QPS 扩容语料和 recall 评测语料绝不能共存于同一个索引。**
 
-- `baseline-conv-result.log` 只有 1 个 HTTP 请求样本（`baseline-token-driver.js` 每次运行只发一次登录请求），n=1 的 p95 没有统计意义
-- `current-conv-result.log` 是 4 个不同接口的混合样本（登录 + 建会话 + 2 次查 token usage，来自 `scenario8-token-usage.js`），跟 baseline 测的根本不是同一个接口
+**顺带挖出的摄入链路真 bug（同日已修）：** 重灌语料时暴露三连缺陷——① 消费者无调参（默认一次 poll 500 条、5 分钟处理上限），重型消费（每条秒级~分钟级）必然超时被踢出组、offset 永不提交、消息无限重放（实测同一文件被处理 10 次，embedding 费用按次重复烧）；② `ParseService` 每次投递盲插 MySQL（实测 16,062 行里只有 2,971 行不重复）；③ `VectorizationService` 用随机 UUID 做 ES 文档 id，重复投递=重复写入。修复：`max-poll-records: 1` + `max.poll.interval.ms: 600000`；ParseService 按 fileMd5 先删后插（幂等）；ES id 改 `fileMd5#chunkId`（幂等覆盖）。修复后实测单遍干净处理，每篇 ~1.3s，逐条提交。
 
-也就是说这两个文件本来就不是为了测"混合检索延迟"生成的，是场景 8（token 消耗对比）的副产品。真正测过混合检索延迟的是 project-report.md §19.3 Scenario 2（20 并发 VU，p95=375ms，跟 2,000ms 阈值比），但没有一次可比的"改造前"基线数据。
+**当前状态：** 干净语料重灌进行到 67/200 时被中断，chunk 级 Recall@10 的正式数字待重灌完成后用 `k6 run scenario7-recall-eval.js` 补测。
 
-**如果这个数字要写进简历/报告，需要重新做一次真正对照的实验**——比如同一份代码、同一个 query，Redis embedding 缓存冷启动 vs 命中缓存分别测 p95（正好对应 `519226c` "cache query embeddings in Redis to cut hybrid search latency" 这个 commit 改了什么），但这需要 embedding API key 先恢复可用（见上）。
+### p95 延迟 1300ms → 260ms：一半复现，一半修正
 
-**2026-07-16 补测：已经把这个对照实验写出来了（`scenario9-search-cache-latency.js`），但被同一个失效 key 挡住，用实测数据证实了这一点：**
-
-同一条 query 连续打两次——第一次（cold，理论上一定 cache miss，等价于优化前）和第二次（warm，理论上应该直接命中 Redis 缓存，等价于优化后）——p95 结果几乎没有差异：
+`scenario9-search-cache-latency.js` 的对照设计（同一条全新 query 连打两次，第一次必 miss / 第二次必命中 Redis embedding 缓存，隔离 `519226c` 这一个变量）在 key 修好后跑出了干净数据（30 轮、0 错误，`data/scenario9-final-20260716.json`）：
 
 ```
-search_latency_cold............: avg=3928.9ms  p(95)=4098.3ms
-search_latency_warm............: avg=3913.4ms  p(95)=4023.2ms
+search_latency_cold............: avg=1329ms  med=1292ms  p(95)=1906ms  min=843ms
+search_latency_warm............: avg=555ms   med=511ms   p(95)=766ms   min=359ms
 ```
 
-查后端日志确认原因：15 轮 × 2 次请求，**每一次**都打出 `向量生成失败，仅使用文本匹配进行搜索`（embedding API 401 重试 3 次耗尽）。因为向量生成从没成功过，Redis 缓存里从来没被写入过任何 embedding，所以 warm 请求同样 cache miss——cold 和 warm 测的其实是同一件事：重试耗尽的固定退避开销，跟 Redis 缓存有没有生效完全无关。**这是直接实测证据，不是推断**：只要这个 key 是坏的，这个仓库里就没有任何办法测出 embedding 缓存对延迟的真实影响，"1300ms → 260ms" 这类数字在当前环境下无法验证，也不该被引用，直到 key 修好、用 `scenario9-search-cache-latency.js` 重新跑出干净数据为止。
+同日另外两轮结果一致（cold 中位数 1129–1302ms；warm 平均 408–536ms）。结论：**"1300ms" 侧完全复现**（cold 中位数 ≈1.3s，一次 embedding API 往返就是混合检索延迟的大头）；**"260ms" 侧复现不出来**——warm 的典型值是中位数 ≈511ms / p95 ≈766ms，260ms 接近观测下限（min 359ms）而不是中心值。可以引用的诚实说法是：**embedding 缓存命中把混合检索延迟降低约 2.4–2.6 倍（中位数 1292ms → 511ms）**。
+
+之前那次"cold/warm 都是 4 秒毫无差异"的失败运行（原因见上：空 key 导致两边测的都是重试耗尽的退避开销）保留在此作为方法论提醒：**依赖挂了的时候，A/B 会静默地测错对象**——先看后端日志确认每条请求都"向量生成成功"，数据才算数。
 
 ### 额外发现：token 消耗对比数据也站不住
 
