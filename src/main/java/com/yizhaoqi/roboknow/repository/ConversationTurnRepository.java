@@ -29,24 +29,24 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
      * 不可能是它的持有者，重置回 PENDING 让 dispatcher 重新处理。回答从未提交（completeIfOwned
      * 会把状态改成 COMPLETE），所以重置不会丢失或重复已提交的回答。
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE ConversationTurn t SET t.status = 'PENDING', t.attemptToken = NULL, " +
            "t.retryCount = t.retryCount + 1 WHERE t.status = 'PROCESSING'")
     int resetOrphanedProcessingTurnsToPending();
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE ConversationTurn t SET t.status = 'PROCESSING', t.attemptToken = :attemptToken, " +
            "t.startedAt = CURRENT_TIMESTAMP WHERE t.id = :id AND t.status = 'PENDING'")
     int claimForProcessing(@Param("id") Long id, @Param("attemptToken") String attemptToken);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE ConversationTurn t SET t.status = 'COMPLETE', t.assistantContent = :assistantContent, " +
            "t.completedAt = CURRENT_TIMESTAMP WHERE t.id = :id AND t.attemptToken = :attemptToken " +
            "AND t.status = 'PROCESSING'")
     int completeIfOwned(@Param("id") Long id, @Param("attemptToken") String attemptToken,
                          @Param("assistantContent") String assistantContent);
 
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Query("UPDATE ConversationTurn t SET t.status = 'FAILED', t.errorCode = :errorCode, " +
            "t.completedAt = CURRENT_TIMESTAMP WHERE t.id = :id AND t.attemptToken = :attemptToken " +
            "AND t.status = 'PROCESSING'")
