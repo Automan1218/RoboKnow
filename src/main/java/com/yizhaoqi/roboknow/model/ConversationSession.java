@@ -40,6 +40,9 @@ public class ConversationSession {
     @Column(name = "round_count")
     private int roundCount = 0; // tracks rounds for incremental extraction
 
+    @Column(name = "next_turn_seq", nullable = false)
+    private int nextTurnSeq = 0; // atomically allocated per-session turn counter
+
     public enum Status {
         ACTIVE, ARCHIVED
     }
