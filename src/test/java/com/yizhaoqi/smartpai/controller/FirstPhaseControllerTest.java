@@ -1,7 +1,6 @@
 package com.yizhaoqi.roboknow.controller;
 
 import com.yizhaoqi.roboknow.config.KafkaConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yizhaoqi.roboknow.entity.SearchResult;
 import com.yizhaoqi.roboknow.model.FileUpload;
 import com.yizhaoqi.roboknow.model.OrganizationTag;
@@ -56,6 +55,7 @@ class FirstPhaseControllerTest {
     private SessionManager sessionManager;
     private RedisTemplate<String, String> redisTemplate;
     private ValueOperations<String, String> valueOperations;
+    private com.yizhaoqi.roboknow.memory.ConversationMemory conversationMemory;
 
     private AuthController authController;
     private UserController userController;
@@ -110,11 +110,13 @@ class FirstPhaseControllerTest {
 
         chatController = new ChatController(chatHandler, sessionManager);
 
+        conversationMemory = mock(com.yizhaoqi.roboknow.memory.ConversationMemory.class);
+
         conversationController = new ConversationController();
         ReflectionTestUtils.setField(conversationController, "redisTemplate", redisTemplate);
         ReflectionTestUtils.setField(conversationController, "userRepository", userRepository);
         ReflectionTestUtils.setField(conversationController, "jwtUtils", jwtUtils);
-        ReflectionTestUtils.setField(conversationController, "objectMapper", new ObjectMapper());
+        ReflectionTestUtils.setField(conversationController, "conversationMemory", conversationMemory);
     }
 
     @Test
@@ -292,14 +294,11 @@ class FirstPhaseControllerTest {
         assertEquals(200, body(empty).get("code"));
 
         when(valueOperations.get("user:1:current_conversation")).thenReturn("conv-1");
-        when(valueOperations.get("conversation:conv-1")).thenReturn("""
-                [
-                  {"role":"user","content":"early","timestamp":"2025-01-01T09:00:00"},
-                  {"role":"assistant","content":"inside","timestamp":"2025-01-02T09:00:00"},
-                  {"role":"user","content":"late","timestamp":"2025-01-03T09:00:00"},
-                  {"role":"assistant","content":"unknown"}
-                ]
-                """);
+        when(conversationMemory.loadHistory("conv-1")).thenReturn(List.of(
+                Map.of("role", "user", "content", "early", "timestamp", "2025-01-01T09:00:00"),
+                Map.of("role", "assistant", "content", "inside", "timestamp", "2025-01-02T09:00:00"),
+                Map.of("role", "user", "content", "late", "timestamp", "2025-01-03T09:00:00"),
+                Map.of("role", "assistant", "content", "unknown")));
 
         ResponseEntity<?> filtered = conversationController.getConversations(
                 "Bearer token", "2025-01-02", "2025-01-02T23:59");
