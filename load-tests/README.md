@@ -29,6 +29,7 @@
 | `scenario6-chat-streaming.js` | Agent 流式对话（TTFT / 完成时长） | **流式输出与长任务可观测性佐证** |
 | `scenario7-recall-eval.js` | Recall@10 金标准评测 | **Recall@10 从 78.6% 到 100%**（2026-07-03 实测，见文末验证记录） |
 | `scenario8-token-usage.js` | 每会话 prompt token 消耗 | **prompt tokens 降低 C%** |
+| `scenario9-search-cache-latency.js` | 同一 query 冷/热缓存 p95 对比 | **混合检索 p95 延迟改善（隔离 embedding 缓存这一个变量）** |
 
 ## 使用方法
 
@@ -83,7 +84,19 @@ k6 run scenario7-recall-eval.js
 
 结果：`recall_at_10` 的 `avg` 即平均 Recall@10。
 
-### 5. Prompt token 消耗（C%）
+### 5. 混合检索缓存 冷/热 p95 对比
+
+```bash
+k6 run -e ITERATIONS=15 scenario9-search-cache-latency.js
+```
+
+同一条（每轮随机拼后缀保证全新）query 连续打两次：第一次一定 cache miss（等价于 `519226c` 优化前——每次都要现算 embedding），第二次应该命中 Redis 缓存（等价于优化后）。排除了"query 难度不同"这个混淆变量，只测"这条 query 有没有被缓存过"一个变量。
+
+⚠️ 前置条件：`embedding.api.key` 必须能正常调用（真实调用会产生费用）。key 失效时 cold/warm 会测出同样的数字（见文末验证记录），那不代表缓存没用，代表这次测试本身没跑起来。
+
+结果读取：`search_latency_cold` 的 p95 是"未命中缓存"延迟，`search_latency_warm` 的 p95 是"命中缓存"延迟，两者相减/相除即缓存带来的改善幅度。
+
+### 6. Prompt token 消耗（C%）
 
 ```bash
 k6 run -e CONVERSATIONS=3 -e TURNS=5 scenario8-token-usage.js
@@ -127,6 +140,17 @@ k6 run --out json=results/raw.json scenario4-search-capacity.js
 也就是说这两个文件本来就不是为了测"混合检索延迟"生成的，是场景 8（token 消耗对比）的副产品。真正测过混合检索延迟的是 project-report.md §19.3 Scenario 2（20 并发 VU，p95=375ms，跟 2,000ms 阈值比），但没有一次可比的"改造前"基线数据。
 
 **如果这个数字要写进简历/报告，需要重新做一次真正对照的实验**——比如同一份代码、同一个 query，Redis embedding 缓存冷启动 vs 命中缓存分别测 p95（正好对应 `519226c` "cache query embeddings in Redis to cut hybrid search latency" 这个 commit 改了什么），但这需要 embedding API key 先恢复可用（见上）。
+
+**2026-07-16 补测：已经把这个对照实验写出来了（`scenario9-search-cache-latency.js`），但被同一个失效 key 挡住，用实测数据证实了这一点：**
+
+同一条 query 连续打两次——第一次（cold，理论上一定 cache miss，等价于优化前）和第二次（warm，理论上应该直接命中 Redis 缓存，等价于优化后）——p95 结果几乎没有差异：
+
+```
+search_latency_cold............: avg=3928.9ms  p(95)=4098.3ms
+search_latency_warm............: avg=3913.4ms  p(95)=4023.2ms
+```
+
+查后端日志确认原因：15 轮 × 2 次请求，**每一次**都打出 `向量生成失败，仅使用文本匹配进行搜索`（embedding API 401 重试 3 次耗尽）。因为向量生成从没成功过，Redis 缓存里从来没被写入过任何 embedding，所以 warm 请求同样 cache miss——cold 和 warm 测的其实是同一件事：重试耗尽的固定退避开销，跟 Redis 缓存有没有生效完全无关。**这是直接实测证据，不是推断**：只要这个 key 是坏的，这个仓库里就没有任何办法测出 embedding 缓存对延迟的真实影响，"1300ms → 260ms" 这类数字在当前环境下无法验证，也不该被引用，直到 key 修好、用 `scenario9-search-cache-latency.js` 重新跑出干净数据为止。
 
 ### 额外发现：token 消耗对比数据也站不住
 
