@@ -84,18 +84,14 @@ public class ConversationTurnWiring {
 
     private void drainAllPending(String convId) {
         while (true) {
-            Optional<ConversationTurn> next = turnRepository
-                    .findFirstByConvIdAndStatusOrderByTurnSeqAsc(convId, ConversationTurn.Status.PENDING);
-            if (next.isEmpty()) return;
-
-            ConversationTurn turn = next.get();
+            // drainAllPending 跑在 turnWorkerExecutor 的裸线程上，没有 Spring 事务上下文；
+            // find+claim 必须通过 completionService 这个真正被 @Transactional 代理包裹的
+            // 跨 bean 调用完成，不能在这里直接调 repository 的 @Modifying 方法。
             String attemptToken = UUID.randomUUID().toString();
-            int claimed = turnRepository.claimForProcessing(turn.getId(), attemptToken);
-            if (claimed == 0) {
-                // 理论上不该有并发 claim（同一 convId 只有一个 drain 在跑），但保底跳过防止死循环
-                continue;
-            }
+            Optional<ConversationTurn> claimedTurn = completionService.claimNextPending(convId, attemptToken);
+            if (claimedTurn.isEmpty()) return;
 
+            ConversationTurn turn = claimedTurn.get();
             String userId = resolveUserId(turn);
             Optional<WebSocketSession> sessionOpt = sessionRegistry.get(userId);
             if (sessionOpt.isEmpty()) {
