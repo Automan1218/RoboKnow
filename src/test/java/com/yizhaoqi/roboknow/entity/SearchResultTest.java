@@ -66,7 +66,7 @@ class SearchResultTest {
         r.setOrgTag("ORG_X");
         r.setIsPublic(true);
         r.setFileName("file.pdf");
-        r.setParentChunkId(1);
+        r.setParentChunkId(1L);
         r.setParentContent("parent text");
 
         assertEquals("new-md5", r.getFileMd5());
