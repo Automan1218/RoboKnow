@@ -29,28 +29,38 @@ public class ConversationMemory {
     private final StringRedisTemplate redis;
     private final TokenBudget tokenBudget;
     private final ObjectMapper objectMapper;
+    private final MessagePersistenceService messagePersistenceService;
 
     @Value("${memory.compress-threshold:0.80}")
     private double compressThreshold;
 
     public ConversationMemory(StringRedisTemplate redis,
                                TokenBudget tokenBudget,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               MessagePersistenceService messagePersistenceService) {
         this.redis = redis;
         this.tokenBudget = tokenBudget;
         this.objectMapper = objectMapper;
+        this.messagePersistenceService = messagePersistenceService;
     }
 
-    /** Load full history for a conversation. Returns empty list on miss. */
+    /** Load full history for a conversation. Redis hit returns immediately; miss falls back to MySQL and backfills Redis. */
     public List<Map<String, String>> loadHistory(String convId) {
         String json = redis.opsForValue().get(historyKey(convId));
-        if (json == null) return new ArrayList<>();
-        try {
-            return objectMapper.readValue(json, new TypeReference<>() {});
-        } catch (Exception e) {
-            logger.error("Failed to parse conversation history convId={}: {}", convId, e.getMessage());
-            return new ArrayList<>();
+        if (json != null) {
+            try {
+                return objectMapper.readValue(json, new TypeReference<>() {});
+            } catch (Exception e) {
+                logger.error("Failed to parse conversation history convId={}: {}", convId, e.getMessage());
+                return new ArrayList<>();
+            }
         }
+
+        List<Map<String, String>> dbHistory = messagePersistenceService.loadFromDb(convId);
+        if (!dbHistory.isEmpty()) {
+            saveHistory(convId, dbHistory);
+        }
+        return dbHistory;
     }
 
     /** Load the STM summary (compressed older messages). */
