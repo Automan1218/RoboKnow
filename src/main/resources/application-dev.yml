@@ -38,11 +38,16 @@ spring:
     consumer:
       group-id: file-processing-group # 消费者组 ID
       auto-offset-reset: earliest
+      # 文件解析+向量化是重型消费（每条消息秒级~分钟级），必须小批量拉取、快提交：
+      # 否则一次 poll 拉几百条，5 分钟内处理不完就被踢出消费组，offset 永远提交不了，
+      # 消息被无限重放（2026-07-16 实测：同一文件被重复处理 10 次，重复调用 embedding API）
+      max-poll-records: 1
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*" # 允许反序列化的包
         client.dns.lookup: use_all_dns_ips
+        max.poll.interval.ms: 600000 # 单条消息处理上限 10 分钟（大文件解析+向量化）
     topic:
       file-processing: file-processing-topic1 # 新增的 Topic 配置
       dlt: file-processing-dlt # 死信队列主题

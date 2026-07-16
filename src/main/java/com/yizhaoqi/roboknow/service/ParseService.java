@@ -25,6 +25,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.xml.sax.Attributes;
@@ -81,6 +82,7 @@ public class ParseService {
                 .build();
     }
 
+    @Transactional
     public void parseAndSave(String fileMd5, InputStream fileStream,
             String userId, String orgTag, boolean isPublic) throws IOException, TikaException {
         logger.info("Start parsing file: fileMd5={}, userId={}, orgTag={}, isPublic={}",
@@ -95,6 +97,10 @@ public class ParseService {
             logger.warn("File content is empty; skipping parse: fileMd5={}", fileMd5);
             return;
         }
+
+        // Kafka 消息可能被重复投递（重平衡、重试）。先清掉该文件已有的分块再写入，
+        // 保证同一条消息处理多少次结果都一样，MySQL 里不会累积重复分块。
+        documentVectorRepository.deleteByFileMd5(fileMd5);
 
         if (!parentChildEnabled) {
             List<String> chunks = splitTextIntoChunksWithSemantics(text, chunkSize);

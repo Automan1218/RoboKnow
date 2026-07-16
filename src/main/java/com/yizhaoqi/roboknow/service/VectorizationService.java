@@ -5,7 +5,6 @@ import com.yizhaoqi.roboknow.entity.EsDocument;
 import com.yizhaoqi.roboknow.model.DocumentVector;
 import com.yizhaoqi.roboknow.repository.DocumentVectorRepository;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,9 +42,11 @@ public class VectorizationService {
 
             List<float[]> vectors = embeddingClient.embed(texts);
 
+            // ES 文档 id 必须由内容坐标决定（fileMd5#chunkId）而不是随机 UUID：
+            // 消息重复投递时同一分块会覆盖自己（幂等），而不是每次都新增一份重复文档
             List<EsDocument> esDocuments = IntStream.range(0, childChunks.size())
                     .mapToObj(i -> new EsDocument(
-                            UUID.randomUUID().toString(),
+                            fileMd5 + "#" + childChunks.get(i).getChunkId(),
                             fileMd5,
                             childChunks.get(i).getChunkId(),
                             childChunks.get(i).getTextContent(),
