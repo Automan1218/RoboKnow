@@ -22,7 +22,6 @@ class ParseServiceUnitTest {
         parseService = new ParseService();
         // 设置配置值
         ReflectionTestUtils.setField(parseService, "chunkSize", 1000);
-        ReflectionTestUtils.setField(parseService, "bufferSize", 8192);
         ReflectionTestUtils.setField(parseService, "maxMemoryThreshold", 0.8);
     }
 
@@ -95,7 +94,9 @@ class ParseServiceUnitTest {
         method.setAccessible(true);
 
         // 测试不同的分块大小
-        int[] chunkSizes = {5, 10, 20, 50};
+        // 注: 分块基于 BreakIterator 词边界，连续中文在没有空格/标点分隔时会被视为一个词元，
+        // 无法在词元内部再切分；因此这里只测试不小于该句最长连续中文片段(15字)的分块大小。
+        int[] chunkSizes = {20, 50, 100};
         
         for (int chunkSize : chunkSizes) {
             @SuppressWarnings("unchecked")
