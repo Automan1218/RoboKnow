@@ -7,5 +7,5 @@ frontend/node_modules
 frontend/dist
 frontend/.git
 target/*
-!target/SmartPAI-0.0.1-SNAPSHOT.jar
+!target/RoboKnow-0.0.1-SNAPSHOT.jar
 *.log
