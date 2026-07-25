@@ -44,10 +44,10 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationTurnDispatcherTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerCoverageTest,FirstPhaseControllerTest"
+          "-Dtest=ConversationTurnDispatcherTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerCoverageTest,FirstPhaseControllerTest,AuthControllerTest,UserControllerTest,SearchControllerTest,ChatControllerTest,ConversationControllerTest,AiUsageControllerTest,AiTokenUsageServiceTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
-          org.jacoco:jacoco-maven-plugin:0.8.12:check
+          org.jacoco:jacoco-maven-plugin:0.8.12:check@check
 
       - name: Package backend
         run: mvn -B -DskipTests package
@@ -425,10 +425,10 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationTurnDispatcherTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerCoverageTest,FirstPhaseControllerTest"
+          "-Dtest=ConversationTurnDispatcherTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerCoverageTest,FirstPhaseControllerTest,AuthControllerTest,UserControllerTest,SearchControllerTest,ChatControllerTest,ConversationControllerTest,AiUsageControllerTest,AiTokenUsageServiceTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
-          org.jacoco:jacoco-maven-plugin:0.8.12:check
+          org.jacoco:jacoco-maven-plugin:0.8.12:check@check
 
       - name: Run SonarQube analysis
         if: ${{ env.SONAR_TOKEN != '' }}
