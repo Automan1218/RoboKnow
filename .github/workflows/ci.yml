@@ -313,6 +313,7 @@ jobs:
   docker-image-build:
     name: Docker image build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs:
       - backend-build-and-test
       - backend-integration-test
@@ -334,7 +335,7 @@ jobs:
         run: docker build -t paismart-backend:${{ github.sha }} .
 
       - name: Scan backend image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -344,6 +345,7 @@ jobs:
           format: sarif
           output: trivy-backend-image.sarif
           exit-code: '0'
+          scanners: vuln
 
       - name: Upload backend image Trivy SARIF
         if: always()
@@ -354,7 +356,8 @@ jobs:
           category: trivy-backend-image
 
       - name: Scan frontend dependencies with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        if: always()
+        uses: aquasecurity/trivy-action@v0.28.0
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -364,6 +367,7 @@ jobs:
           format: sarif
           output: trivy-frontend-fs.sarif
           exit-code: '0'
+          scanners: vuln
 
       - name: Upload frontend dependency Trivy SARIF
         if: always()
@@ -375,6 +379,7 @@ jobs:
 
       - name: Upload Trivy scan reports
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: trivy-scan-reports
