@@ -333,6 +333,26 @@ jobs:
       - name: Build backend Docker image
         run: docker build -t paismart-backend:${{ github.sha }} .
 
+      - name: Scan backend image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          scan-type: image
+          image-ref: paismart-backend:${{ github.sha }}
+          format: sarif
+          output: trivy-backend-image.sarif
+          exit-code: '0'
+
+      - name: Upload backend image Trivy SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend-image.sarif
+          category: trivy-backend-image
+
       - name: Summarize Docker image
         run: |
           echo "## Docker image" >> "$GITHUB_STEP_SUMMARY"
