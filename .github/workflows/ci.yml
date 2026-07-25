@@ -353,6 +353,26 @@ jobs:
           sarif_file: trivy-backend-image.sarif
           category: trivy-backend-image
 
+      - name: Scan frontend dependencies with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          scan-type: fs
+          scan-ref: frontend
+          format: sarif
+          output: trivy-frontend-fs.sarif
+          exit-code: '0'
+
+      - name: Upload frontend dependency Trivy SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-frontend-fs.sarif
+          category: trivy-frontend-fs
+
       - name: Summarize Docker image
         run: |
           echo "## Docker image" >> "$GITHUB_STEP_SUMMARY"
