@@ -57,7 +57,7 @@ jobs:
       - name: Stage deploy bundle
         run: |
           mkdir -p deploy-bundle
-          cp target/SmartPAI-*.jar deploy-bundle/app.jar
+          cp target/RoboKnow-*.jar deploy-bundle/app.jar
           cp -r frontend/dist deploy-bundle/dist
           cp docs/docker-compose.yaml deploy-bundle/docker-compose.yaml
           cp deploy/nginx.conf deploy-bundle/nginx.conf
