@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate PaiSmart_Project_Report.docx from project-report.md.
+Generate RoboKnow_Project_Report.docx from project-report.md.
 Corrections applied:
   - Solo developer (removes team/multi-member references)
   - No K8s (ADR-07 updated; only future-enhancement section keeps scaling notes)
@@ -358,7 +358,7 @@ def process(doc, content):
 def main():
     base = os.path.dirname(os.path.abspath(__file__))
     md_path = os.path.join(base, 'project-report.md')
-    out_path = os.path.join(base, 'PaiSmart_Project_Report.docx')
+    out_path = os.path.join(base, 'RoboKnow_Project_Report.docx')
 
     print(f'Reading  : {md_path}')
     with open(md_path, 'r', encoding='utf-8') as f:

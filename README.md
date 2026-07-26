@@ -1,4 +1,4 @@
-# SmartPai
+# RoboKnow
 
 <p align="center">
   <strong>🚀 Enterprise-grade RAG Intelligent Knowledge Base System</strong>
@@ -22,7 +22,7 @@
 
 This is my **personal learning project**, aimed at deeply studying and practicing RAG (Retrieval-Augmented Generation) technology, microservices architecture, and enterprise-level system development.
 
-SmartPai is an enterprise-grade AI knowledge base management system that leverages Retrieval-Augmented Generation (RAG) technology to provide intelligent document processing and retrieval capabilities.
+RoboKnow is an enterprise-grade AI knowledge base management system that leverages Retrieval-Augmented Generation (RAG) technology to provide intelligent document processing and retrieval capabilities.
 
 The core technology stack includes ElasticSearch, Kafka, WebSocket, Spring Security, Docker, MySQL, and Redis.
 
@@ -155,7 +155,7 @@ frontend/
 
 ### 📚 Knowledge Base Management
 
-SmartPai provides complete document upload and parsing functionality, supporting chunked file uploads and resumable transfers, with tag-based organization management. Documents can be public or private and can be associated with specific organization tags for better permission classification.
+RoboKnow provides complete document upload and parsing functionality, supporting chunked file uploads and resumable transfers, with tag-based organization management. Documents can be public or private and can be associated with specific organization tags for better permission classification.
 
 #### Document Processing Pipeline
 
@@ -193,7 +193,7 @@ graph LR
 
 ### 🧠 AI-Driven RAG Implementation
 
-The core of SmartPai is the RAG implementation:
+The core of RoboKnow is the RAG implementation:
 
 #### RAG Chat Flow
 
@@ -232,7 +232,7 @@ sequenceDiagram
 
 ### 🏢 Enterprise Multi-tenancy
 
-SmartPai supports multi-tenant architecture through organization tags. Each user can create or join one or more organizations, and each organization can have independent knowledge bases and document management.
+RoboKnow supports multi-tenant architecture through organization tags. Each user can create or join one or more organizations, and each organization can have independent knowledge bases and document management.
 
 #### Security & Access Control Architecture
 
@@ -305,7 +305,7 @@ Before getting started, please ensure the following software is installed:
 
 ## 🏗️ Architecture Design
 
-SmartPai's architecture features a modern, cloud-native application with clear separation of concerns, scalable components, and integration with AI technology. The modular design allows for future expansion and replacement of individual components as technology evolves, especially in the rapidly changing field of AI integration.
+RoboKnow's architecture features a modern, cloud-native application with clear separation of concerns, scalable components, and integration with AI technology. The modular design allows for future expansion and replacement of individual components as technology evolves, especially in the rapidly changing field of AI integration.
 
 ### Layered Architecture
 
@@ -439,10 +439,10 @@ public class FileUpload {
 
 ```bash
 # Clone the project
-git clone https://github.com/your-username/smartpai.git
+git clone https://github.com/your-username/roboknow.git
 
 # Navigate to backend directory
-cd smartpai
+cd roboknow
 
 # Start dependency services (Docker Compose)
 docker-compose up -d

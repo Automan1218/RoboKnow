@@ -1,5 +1,5 @@
 """
-把 docs/ 目录下的真实文件灌入 PaiSmart 知识库，供 recall 评测使用。
+把 docs/ 目录下的真实文件灌入 RoboKnow 知识库，供 recall 评测使用。
 一次性脚本，不是 k6 负载测试的一部分。
 
 用法：
@@ -25,8 +25,8 @@ DOCS_DIR = os.path.join(REPO_ROOT, "docs")
 # 只挑文本类可解析文档，跳过二进制图片/表格类不适合做检索评测的文件
 CANDIDATE_FILES = [
     "project-report.md",
-    "PaiSmart_Project_Report.docx",
-    "project-tasks/PaiSmart_Biweekly_Reports.md",
+    "RoboKnow_Project_Report.docx",
+    "project-tasks/RoboKnow_Biweekly_Reports.md",
     "databases/ddl.sql",
     "nginx.conf",
     "generate_report.py",

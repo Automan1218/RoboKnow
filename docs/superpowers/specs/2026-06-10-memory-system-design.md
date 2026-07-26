@@ -1,8 +1,8 @@
-# PaiSmart 记忆系统设计（长短期对话记忆重构）
+# RoboKnow 记忆系统设计（长短期对话记忆重构）
 
 > 状态：设计待评审
 > 日期：2026-06-10
-> 范围：把现有散落在 `ReactAgentService` 的记忆逻辑，重构为「门面 + 5 组件」架构，落到 PaiSmart 企业 Web 多租户环境。
+> 范围：把现有散落在 `ReactAgentService` 的记忆逻辑，重构为「门面 + 5 组件」架构，落到 RoboKnow 企业 Web 多租户环境。
 > 不含代码。
 
 ---
@@ -40,11 +40,11 @@
 
 ## 2. 核心设计判断：借职责，换载体
 
-参考架构来自 **paicli —— 单机 / 单用户 / 单进程 CLI Agent**（证据：本地 JSON 文件、`-Dpaicli.memory.dir`、"进程退出即对话结束"）。PaiSmart 是 **多实例 / 多租户 / WebSocket 并发的企业 Web 系统**。
+参考架构来自 **paicli —— 单机 / 单用户 / 单进程 CLI Agent**（证据：本地 JSON 文件、`-Dpaicli.memory.dir`、"进程退出即对话结束"）。RoboKnow 是 **多实例 / 多租户 / WebSocket 并发的企业 Web 系统**。
 
 **结论：5 个组件的职责划分照搬；落地载体全换。**
 
-| 参考做法（CLI） | 直接搬到 Web 的后果 | PaiSmart 做法 |
+| 参考做法（CLI） | 直接搬到 Web 的后果 | RoboKnow 做法 |
 |---|---|---|
 | LTM 存本地 `long_term_memory.json` | 多实例不共享、并发写互相覆盖、扩容/重启丢数据 | LTM → MySQL 表 |
 | 内存 List 存短期消息 | 实例间不共享、实例挂掉即丢 | STM → Redis |

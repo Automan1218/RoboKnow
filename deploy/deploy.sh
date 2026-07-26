@@ -38,28 +38,28 @@ done
 
 echo "==> Wait for Elasticsearch"
 for _ in $(seq 1 60); do
-  if curl -fsS -u elastic:PaiSmart2025 http://localhost:9200/_cluster/health >/dev/null 2>&1; then break; fi
+  if curl -fsS -u elastic:RoboKnow2025 http://localhost:9200/_cluster/health >/dev/null 2>&1; then break; fi
   sleep 5
 done
 
 echo "==> Ensure MinIO bucket 'uploads' exists"
-sudo docker run --rm --network pai_smart_default --entrypoint sh minio/mc -c \
-  "mc alias set m http://minio:19000 admin PaiSmart2025 && mc mb -p m/uploads" || true
+sudo docker run --rm --network roboknow_default --entrypoint sh minio/mc -c \
+  "mc alias set m http://minio:19000 admin RoboKnow2025 && mc mb -p m/uploads" || true
 
 echo "==> Deploy backend via systemd"
-sudo cp paismart.service /etc/systemd/system/paismart.service
+sudo cp roboknow.service /etc/systemd/system/roboknow.service
 sudo systemctl daemon-reload
-sudo systemctl enable paismart >/dev/null 2>&1 || true
-sudo systemctl restart paismart
+sudo systemctl enable roboknow >/dev/null 2>&1 || true
+sudo systemctl restart roboknow
 
 echo "==> Deploy frontend via nginx"
-sudo mkdir -p /var/www/paismart
-sudo rsync -a --delete dist/ /var/www/paismart/
-sudo cp nginx.conf /etc/nginx/sites-available/paismart
-sudo ln -sf /etc/nginx/sites-available/paismart /etc/nginx/sites-enabled/paismart
+sudo mkdir -p /var/www/roboknow
+sudo rsync -a --delete dist/ /var/www/roboknow/
+sudo cp nginx.conf /etc/nginx/sites-available/roboknow
+sudo ln -sf /etc/nginx/sites-available/roboknow /etc/nginx/sites-enabled/roboknow
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
 
 echo "==> Deploy done. Backend status:"
-sudo systemctl --no-pager status paismart | head -n 5 || true
+sudo systemctl --no-pager status roboknow | head -n 5 || true

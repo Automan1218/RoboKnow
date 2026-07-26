@@ -35,7 +35,7 @@ CHUNK_SIZE = 5 * 1024 * 1024
 # 与 amplify_docs.py 相同的源，用真实项目文本做话题相近的干扰
 SOURCE_FILES = [
     "project-report.md",
-    "project-tasks/PaiSmart_Biweekly_Reports.md",
+    "project-tasks/RoboKnow_Biweekly_Reports.md",
 ]
 
 

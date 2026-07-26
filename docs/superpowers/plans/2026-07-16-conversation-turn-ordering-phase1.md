@@ -492,7 +492,7 @@ git commit -m "feat(conversation): atomic per-session turnSeq allocation via pes
 
 Run:
 ```bash
-docker exec mysql mysql -uroot -pPaiSmart2025 PaiSmart -N -e "SELECT conv_id, seq, COUNT(*) c FROM conversation_messages GROUP BY conv_id, seq HAVING c > 1"
+docker exec mysql mysql -uroot -pRoboKnow2025 RoboKnow -N -e "SELECT conv_id, seq, COUNT(*) c FROM conversation_messages GROUP BY conv_id, seq HAVING c > 1"
 ```
 Expected: 空结果。如果非空,先手工去重(保留每组最早 id)再继续。
 
@@ -1702,7 +1702,7 @@ Expected: BUILD SUCCESS，0 失败（预期会跑很久，覆盖全项目)
 
 启动后端（复用现有注入 key 的方式）：
 ```bash
-cd "c:\Users\Siyuan\Documents\Henry\PaiSmart"
+cd "c:\Users\Siyuan\Documents\Henry\RoboKnow"
 OPENAI_API_KEY=$(sed -n 's/.*key: \(sk-proj-[^ ]*\).*/\1/p' src/main/resources/application-docker.yml | head -1) mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
@@ -1712,7 +1712,7 @@ OPENAI_API_KEY=$(sed -n 's/.*key: \(sk-proj-[^ ]*\).*/\1/p' src/main/resources/a
 - 查 `conversation_messages` 表该 convId 的记录，`seq` 严格 0..5，内容顺序对应 U1,A1,U2,A2,U3,A3。
 
 ```bash
-docker exec mysql mysql -uroot -pPaiSmart2025 PaiSmart -N -e "SELECT seq, role, LEFT(content,40) FROM conversation_messages WHERE conv_id='<刚才用的 convId>' ORDER BY seq"
+docker exec mysql mysql -uroot -pRoboKnow2025 RoboKnow -N -e "SELECT seq, role, LEFT(content,40) FROM conversation_messages WHERE conv_id='<刚才用的 convId>' ORDER BY seq"
 ```
 
 - [ ] **Step 5: Commit**

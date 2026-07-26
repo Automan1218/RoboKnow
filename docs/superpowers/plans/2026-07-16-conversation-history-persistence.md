@@ -1130,12 +1130,12 @@ git commit -m "chore(memory): remove unused pre-refactor Conversation LTM code"
 
 - [ ] **Step 1: Confirm the table is really the old one and safe to drop**
 
-Run: `docker exec mysql mysql -uroot -pPaiSmart2025 -e "SELECT COUNT(*) FROM PaiSmart.conversations;"`
+Run: `docker exec mysql mysql -uroot -pRoboKnow2025 -e "SELECT COUNT(*) FROM RoboKnow.conversations;"`
 Expected: `9` (matches the count identified during investigation — the legacy pre-refactor rows).
 
 - [ ] **Step 2: Drop it**
 
-Run: `docker exec mysql mysql -uroot -pPaiSmart2025 -e "DROP TABLE PaiSmart.conversations;"`
+Run: `docker exec mysql mysql -uroot -pRoboKnow2025 -e "DROP TABLE RoboKnow.conversations;"`
 Expected: no output (success). This is safe because Task 7 removed the JPA entity mapped to this table, so `ddl-auto: update` will not try to recreate or reference it.
 
 - [ ] **Step 3: Restart the backend and confirm it still starts cleanly**
@@ -1160,18 +1160,18 @@ Use the frontend (or `curl`/Postman against `POST` chat endpoint / WebSocket) lo
 
 - [ ] **Step 3: Verify the write landed in MySQL**
 
-Run: `docker exec mysql mysql -uroot -pPaiSmart2025 -e "SELECT conv_id, seq, role, LEFT(content,30), created_at FROM PaiSmart.conversation_messages ORDER BY id DESC LIMIT 4;"`
+Run: `docker exec mysql mysql -uroot -pRoboKnow2025 -e "SELECT conv_id, seq, role, LEFT(content,30), created_at FROM RoboKnow.conversation_messages ORDER BY id DESC LIMIT 4;"`
 Expected: the just-sent user message and assistant reply, `seq` values 0/1 (or continuing from prior count if the conversation already had messages), roles alternating `user`/`assistant`.
 
 - [ ] **Step 4: Verify the TTL-expiry recovery path actually works**
 
-Run: `docker exec redis redis-cli -a PaiSmart2025 DEL "conversation:<the convId used in step 2>"` (get the convId from the app's session list, or from the `conv_id` column in step 3)
+Run: `docker exec redis redis-cli -a RoboKnow2025 DEL "conversation:<the convId used in step 2>"` (get the convId from the app's session list, or from the `conv_id` column in step 3)
 Then re-fetch the conversation through the app (reload the chat view, or `GET /api/v1/users/conversation`).
 Expected: the message from step 2 is still visible — proves the cache-aside fallback actually recovers "lost" (expired) history from MySQL, which is the original bug this whole plan exists to fix.
 
 - [ ] **Step 5: Verify Redis was backfilled by the fallback**
 
-Run: `docker exec redis redis-cli -a PaiSmart2025 GET "conversation:<the convId>"`
+Run: `docker exec redis redis-cli -a RoboKnow2025 GET "conversation:<the convId>"`
 Expected: non-empty JSON — confirms `loadHistory()`'s cache-aside backfill (Task 4) actually re-wrote Redis after the DB fallback, not just served the DB result once.
 
 - [ ] **Step 6: Verify the admin endpoint sees the same data**

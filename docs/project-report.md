@@ -1,4 +1,4 @@
-# PaiSmart — Comprehensive Project Report
+# RoboKnow — Comprehensive Project Report
 
 > Diagrams marked `[DIAGRAM]` must be replaced with actual UML/draw.io exports before submission.
 
@@ -35,9 +35,9 @@
 
 ## 1. Project Overview and Introduction
 
-**PaiSmart (派聪明)** is an enterprise-grade AI knowledge management platform built on Retrieval-Augmented Generation (RAG) technology. The system enables organisations and individual users to upload internal documents — PDF, Word, plain text — and query that accumulated knowledge through a natural-language conversational interface backed by a large language model (LLM).
+**RoboKnow (派聪明)** is an enterprise-grade AI knowledge management platform built on Retrieval-Augmented Generation (RAG) technology. The system enables organisations and individual users to upload internal documents — PDF, Word, plain text — and query that accumulated knowledge through a natural-language conversational interface backed by a large language model (LLM).
 
-Unlike a generic chatbot that relies solely on an LLM's parametric memory, PaiSmart grounds every response in the user's own uploaded documents. The LLM acts as a reasoning and language layer on top of a private, permission-controlled knowledge base. This eliminates hallucination risk on domain-specific topics and ensures answers are traceable to a source document.
+Unlike a generic chatbot that relies solely on an LLM's parametric memory, RoboKnow grounds every response in the user's own uploaded documents. The LLM acts as a reasoning and language layer on top of a private, permission-controlled knowledge base. This eliminates hallucination risk on domain-specific topics and ensures answers are traceable to a source document.
 
 ### 1.1 Core Value Proposition
 
@@ -52,8 +52,8 @@ Unlike a generic chatbot that relies solely on an LLM's parametric memory, PaiSm
 
 ### 1.2 System Name and Scope
 
-- **Project name:** PaiSmart (SmartPAI internally)
-- **Backend artifact:** `SmartPAI-*.jar` (Spring Boot 3.4.2, Java 17)
+- **Project name:** RoboKnow (RoboKnow internally)
+- **Backend artifact:** `RoboKnow-*.jar` (Spring Boot 3.4.2, Java 17)
 - **Frontend:** Vue 3 SPA served by Nginx
 - **Deployment target:** AWS EC2 (single instance), Docker Compose for middleware
 - **Primary language:** English (UI, AI prompts, API responses)
@@ -75,7 +75,7 @@ Modern organisations accumulate knowledge across disconnected storage systems: e
 ### 2.2 Individual User Scenarios
 
 **Scenario A — Student Learning**
-A university student uploads lecture slides, textbook chapters, and research papers for a course. Instead of re-reading all materials before an exam, they ask: *"Explain the difference between supervised and unsupervised learning as described in chapter 4."* PaiSmart retrieves the relevant chunks and generates a concise, cited answer.
+A university student uploads lecture slides, textbook chapters, and research papers for a course. Instead of re-reading all materials before an exam, they ask: *"Explain the difference between supervised and unsupervised learning as described in chapter 4."* RoboKnow retrieves the relevant chunks and generates a concise, cited answer.
 
 **Scenario B — Researcher**
 A researcher has accumulated 200 academic papers on a topic. They upload all papers and ask cross-cutting questions: *"Which papers describe transformer architectures with fewer than 100M parameters?"* The hybrid search surfaces semantically relevant chunks across all papers.
@@ -99,7 +99,7 @@ A medical practice uploads clinical guidelines and drug interaction references. 
 
 ### 2.4 Pain Points Addressed
 
-| Pain Point | PaiSmart Solution |
+| Pain Point | RoboKnow Solution |
 |-----------|------------------|
 | Can't search inside PDF/DOCX content | Apache Tika extracts full text; IK tokeniser enables Chinese full-text search |
 | Search returns irrelevant keyword matches | Hybrid BM25 + vector KNN ranks by semantic relevance |
@@ -376,7 +376,7 @@ Organisation Tags implement multi-tenancy without full database-level isolation.
 - M4.2: Integration tests with real MySQL, Redis, Elasticsearch (Docker services in CI)
 - M4.3: Static analysis: Checkstyle + SpotBugs reports
 - M4.4: OWASP Dependency-Check (weekly schedule, SARIF to GitHub Security)
-- M4.5: Docker image build (`paismart-backend:<sha>`) per CI run
+- M4.5: Docker image build (`roboknow-backend:<sha>`) per CI run
 - M4.6: CD pipeline: build → rsync → EC2 deploy via `deploy.sh` + systemd
 - M4.7: SonarQube gate (conditional on `SONAR_HOST_URL` secret)
 - M4.8: Switch LLM and embedding to OpenAI provider
@@ -448,15 +448,13 @@ Organisation Tags implement multi-tenancy without full database-level isolation.
 
 ### 8.2 Per-Member Effort Breakdown
 
+This is a solo project — one developer owned every role (backend, frontend,
+DevOps/QA) across all four sprints, so the per-member breakdown is identical
+to the overall effort table in 8.1:
+
 | Member | Role | Sprint 1 | Sprint 2 | Sprint 3 | Sprint 4 | Total |
 |--------|------|----------|----------|----------|----------|-------|
-| [Name 1] | Backend Lead | – | – | – | – | – |
-| [Name 2] | Frontend Lead | – | – | – | – | – |
-| [Name 3] | DevOps / QA | – | – | – | – | – |
-| [Name 4] | Full Stack | – | – | – | – | – |
-| **Total** | | | | | | |
-
-> Fill in actual hours from your project management tool (GitHub Projects / Jira / Trello).
+| Sole developer | Full Stack (Backend, Frontend, DevOps/QA) | ~45 | ~65 | ~80 | ~55 | **~245** |
 
 ---
 
@@ -500,7 +498,7 @@ Organisation Tags implement multi-tenancy without full database-level isolation.
 | Large Language Model | OpenAI | `gpt-4o-mini` | Chat response generation; ReAct reasoning; STM/LTM summarisation |
 | Text Embedding | OpenAI | `text-embedding-3-large` | Converts document chunks and queries to 2048-dim vectors for semantic search |
 
-**Embedding dimension note:** `text-embedding-3-large` natively produces 3072 dimensions. PaiSmart uses Matryoshka Representation Learning (MRL) to reduce to 2048 dimensions, configured via the OpenAI API `dimensions` parameter. This reduces ES storage and KNN query latency with minimal recall degradation.
+**Embedding dimension note:** `text-embedding-3-large` natively produces 3072 dimensions. RoboKnow uses Matryoshka Representation Learning (MRL) to reduce to 2048 dimensions, configured via the OpenAI API `dimensions` parameter. This reduces ES storage and KNN query latency with minimal recall degradation.
 
 ### 9.4 Infrastructure
 
@@ -512,7 +510,7 @@ Organisation Tags implement multi-tenancy without full database-level isolation.
 | CI/CD | GitHub Actions | N/A | `ci.yml` (build + test), `cd.yml` (deploy to EC2) |
 | SAST | Checkstyle + SpotBugs | 3.5.0 / 4.8.6 | Static analysis on every CI build |
 | Dependency Scan | OWASP Dependency-Check | 10.0.4 | Weekly CVE scan; SARIF to GitHub Security tab |
-| Code Quality | SonarQube | 5.1.0 | Conditional on `SONAR_HOST_URL`; project key: `PaiSmart` |
+| Code Quality | SonarQube | 5.1.0 | Conditional on `SONAR_HOST_URL`; project key: `RoboKnow` |
 
 ---
 
@@ -614,13 +612,13 @@ Organisation Tags implement multi-tenancy without full database-level isolation.
 │  │  ┌──────────────────────────────────────────────────┐   │    │
 │  │  │  systemd                                         │   │    │
 │  │  │  ├─ nginx.service  (port 80/443)                │   │    │
-│  │  │  └─ paismart.service  (SmartPAI-*.jar, port 8081│   │    │
+│  │  │  └─ roboknow.service  (RoboKnow-*.jar, port 8081│   │    │
 │  │  └──────────────────────────────────────────────────┘   │    │
 │  │                                                         │    │
 │  │  ┌──────────────────────────────────────────────────┐   │    │
 │  │  │  Docker Engine (docker-compose.yaml)              │   │    │
 │  │  │  ┌──────────┐ ┌──────────┐ ┌──────────────────┐  │   │    │
-│  │  │  │ mysql:8  │ │ redis:7  │ │ paismart-es-ik   │  │   │    │
+│  │  │  │ mysql:8  │ │ redis:7  │ │ roboknow-es-ik   │  │   │    │
 │  │  │  │ :3306    │ │ :6379    │ │ :9200 (IK plugin)│  │   │    │
 │  │  │  └──────────┘ └──────────┘ └──────────────────┘  │   │    │
 │  │  │  ┌──────────┐ ┌──────────────────────────────┐    │   │    │
@@ -742,7 +740,7 @@ External APIs (outbound from EC2):
        │ git push
        ▼
 <<device>> GitHub (origin)
-  <<artifact>> Repository: PaiSmart
+  <<artifact>> Repository: RoboKnow
        │ triggers CI (push to master/dev/**)
        │ triggers CD (push to dev/hzy)
        ▼
@@ -754,7 +752,7 @@ External APIs (outbound from EC2):
     - docker run services (MySQL, Redis, ES)
     - mvn integration test
     - Checkstyle + SpotBugs
-    - docker build paismart-backend:<sha>
+    - docker build roboknow-backend:<sha>
   <<component>> cd.yml
     - mvn package -DskipTests
     - pnpm build (frontend)
@@ -767,14 +765,14 @@ External APIs (outbound from EC2):
       <<artifact>> /etc/nginx/nginx.conf
         proxy_pass /api/ → :8081
         proxy_pass /ws/  → :8081
-        root /home/ubuntu/paismart/dist (frontend)
-    <<artifact>> paismart.service
-      <<artifact>> SmartPAI-*.jar (Spring Boot, port 8081)
+        root /home/ubuntu/roboknow/dist (frontend)
+    <<artifact>> roboknow.service
+      <<artifact>> RoboKnow-*.jar (Spring Boot, port 8081)
         env: OPENAI_API_KEY, JWT_SECRET_KEY, DB credentials
   <<execution environment>> Docker Engine
     <<container>> mysql:8       (3306, volume: mysql-data)
     <<container>> redis:7       (6379, volume: redis-data, AOF)
-    <<container>> paismart-es-ik (9200, volume: es-data, IK plugin)
+    <<container>> roboknow-es-ik (9200, volume: es-data, IK plugin)
     <<container>> minio         (19000/19001, volume: minio-data)
     <<container>> kafka-kraft   (9092, volume: kafka-data)
 
@@ -1423,13 +1421,13 @@ Failure causes: job fail, blocks downstream jobs
 
 ```
 Services (Docker):
-  mysql:8    (MYSQL_ROOT_PASSWORD=PaiSmart2025, MYSQL_DATABASE=PaiSmart)
+  mysql:8    (MYSQL_ROOT_PASSWORD=RoboKnow2025, MYSQL_DATABASE=RoboKnow)
   redis:7    (no auth in CI)
-  paismart-es-ik:8.10.4  (custom image, IK analyzer, xpack.security.enabled=true)
+  roboknow-es-ik:8.10.4  (custom image, IK analyzer, xpack.security.enabled=true)
 
 Steps:
-1. docker build -t paismart-es-ik:8.10.4 docker/elasticsearch-ik
-2. docker run paismart-es with ELASTIC_PASSWORD=PaiSmart2025
+1. docker build -t roboknow-es-ik:8.10.4 docker/elasticsearch-ik
+2. docker run roboknow-es with ELASTIC_PASSWORD=RoboKnow2025
 3. Wait loop: curl /_cluster/health + /_analyze with IK (up to 40 retries x 10s)
 4. mvn -B -Dtest=SmartPaiApplicationTests,ParseServiceTest,
                UploadServicePerformanceTest test
@@ -1456,7 +1454,7 @@ Note: continue-on-error: true (non-blocking; visibility only)
 ```
 Steps:
 1. mvn -B -DskipTests package
-2. docker build -t paismart-backend:<github.sha> .
+2. docker build -t roboknow-backend:<github.sha> .
 3. Image NOT pushed to registry (no registry configured)
    → Verifies Dockerfile is valid and image builds cleanly
 ```
@@ -1469,7 +1467,7 @@ Steps:
 2. mvn sonar:sonar
    -Dsonar.host.url=${SONAR_HOST_URL}
    -Dsonar.token=${SONAR_TOKEN}
-   -Dsonar.projectKey=PaiSmart
+   -Dsonar.projectKey=RoboKnow
    -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 ```
 
@@ -1494,29 +1492,29 @@ Job: build-and-deploy
 
 1. Checkout
 2. Setup JDK 17 + Maven cache
-3. mvn -B -DskipTests package  →  target/SmartPAI-*.jar
+3. mvn -B -DskipTests package  →  target/RoboKnow-*.jar
 4. pnpm/action-setup@v4 (pnpm 8)
 5. actions/setup-node@v4 (Node 18, pnpm cache)
 6. cd frontend && pnpm install --no-frozen-lockfile && pnpm build
 7. Stage deploy bundle:
    deploy-bundle/
-     app.jar            ← SmartPAI-*.jar
+     app.jar            ← RoboKnow-*.jar
      dist/              ← frontend/dist
      docker-compose.yaml
      nginx.conf
-     paismart.service   ← systemd unit file
+     roboknow.service   ← systemd unit file
      deploy.sh          ← remote deploy script
 8. Setup SSH key from EC2_SSH_KEY secret
-9. rsync -az deploy-bundle/ ubuntu@<EC2_HOST>:/home/ubuntu/paismart/
+9. rsync -az deploy-bundle/ ubuntu@<EC2_HOST>:/home/ubuntu/roboknow/
 10. ssh EC2: chmod +x deploy.sh && ./deploy.sh
 
 deploy.sh actions (on EC2):
-  - systemctl stop paismart.service
-  - cp app.jar /opt/paismart/app.jar
-  - cp -r dist /var/www/paismart
-  - cp nginx.conf /etc/nginx/conf.d/paismart.conf
+  - systemctl stop roboknow.service
+  - cp app.jar /opt/roboknow/app.jar
+  - cp -r dist /var/www/roboknow
+  - cp nginx.conf /etc/nginx/conf.d/roboknow.conf
   - docker-compose up -d (idempotent)
-  - systemctl start paismart.service
+  - systemctl start roboknow.service
   - nginx -s reload
 ```
 

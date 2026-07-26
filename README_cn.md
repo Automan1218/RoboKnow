@@ -13,7 +13,7 @@
 </p>
 这是我的一个个人学习项目，旨在深入学习和实践 RAG（检索增强生成）技术、微服务架构以及企业级系统开发。
 
-派聪明（PaiSmart）是一个企业级的 AI 知识库管理系统，采用检索增强生成（RAG）技术，提供智能文档处理和检索能力。
+派聪明（RoboKnow）是一个企业级的 AI 知识库管理系统，采用检索增强生成（RAG）技术，提供智能文档处理和检索能力。
 
 核心技术栈包括 ElasticSearch、Kafka、WebSocket、Spring Security、Docker、MySQL 和 Redis。
 

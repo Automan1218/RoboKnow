@@ -1,6 +1,6 @@
-# PaiSmart 负载测试（k6）
+# RoboKnow 负载测试（k6）
 
-用 [k6](https://k6.io/) 对 PaiSmart 各核心链路做压测与评测，产出简历/汇报中需要的量化数据。
+用 [k6](https://k6.io/) 对 RoboKnow 各核心链路做压测与评测，产出简历/汇报中需要的量化数据。
 
 ## 前置条件
 

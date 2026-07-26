@@ -1,4 +1,4 @@
-name: pai_smart
+name: roboknow
 
 services:
   mysql:
@@ -8,8 +8,8 @@ services:
     ports:
       - "3307:3306"
     environment:
-      MYSQL_DATABASE: PaiSmart
-      MYSQL_ROOT_PASSWORD: PaiSmart2025
+      MYSQL_DATABASE: RoboKnow
+      MYSQL_ROOT_PASSWORD: RoboKnow2025
     volumes:
       - mysql-data:/var/lib/mysql
       - /data/docker/mysql/conf:/etc/mysql/conf.d
@@ -32,7 +32,7 @@ services:
       - /data/docker/minio/config:/root/.minio
     environment:
       MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: PaiSmart2025
+      MINIO_ROOT_PASSWORD: RoboKnow2025
     command: server /data --console-address ":19001" -address ":19000"
 
   redis:
@@ -46,15 +46,15 @@ services:
       - redis-data:/data
     healthcheck:
       start_period: 5s
-      test: ["CMD", "redis-cli", "-a", "PaiSmart2025", "ping"]
+      test: ["CMD", "redis-cli", "-a", "RoboKnow2025", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-    command: redis-server --bind 0.0.0.0 --port 6379 --requirepass PaiSmart2025 --appendonly yes
+    command: redis-server --bind 0.0.0.0 --port 6379 --requirepass RoboKnow2025 --appendonly yes
 
   kafka:
     image: bitnamilegacy/kafka:latest
-    container_name: kafka       # 如果需要按照新的命名规则，请改为 pai_smart_kafka
+    container_name: kafka       # 如果需要按照新的命名规则，请改为 roboknow_kafka
     restart: always
     ports:
       - "9092:9092"
@@ -123,14 +123,14 @@ services:
     volumes:
       - es-data:/usr/share/elasticsearch/data
     environment:
-      - ELASTIC_PASSWORD=PaiSmart2025
-      - node.name=pai-smart-es01
+      - ELASTIC_PASSWORD=RoboKnow2025
+      - node.name=roboknow-es01
       - discovery.type=single-node
       - xpack.license.self_generated.type=basic
       - xpack.security.enabled=true
       - xpack.security.enrollment.enabled=false
       - xpack.security.http.ssl.enabled=false
-      - cluster.name=pai-smart-es-cluster
+      - cluster.name=roboknow-es-cluster
 
       # 内存配置 (根据可用RAM调整)
       - ES_JAVA_OPTS=-Xms2g -Xmx2g

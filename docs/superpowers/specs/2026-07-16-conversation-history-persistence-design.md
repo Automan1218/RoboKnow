@@ -1,4 +1,4 @@
-# PaiSmart 会话历史持久化设计（Redis 热缓存 + MySQL 兜底）
+# RoboKnow 会话历史持久化设计（Redis 热缓存 + MySQL 兜底）
 
 > 状态：设计待评审
 > 日期：2026-07-16
