@@ -3,11 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - main
       - 'dev/**'
   pull_request:
     branches:
-      - master
+      - main
       - 'dev/**'
   workflow_dispatch:
   schedule:
@@ -44,10 +44,10 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerTest,FirstPhaseControllerTest"
+          "-Dtest=ConversationTurnDispatcherTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerCoverageTest,FirstPhaseControllerTest,AuthControllerTest,UserControllerTest,SearchControllerTest,ChatControllerTest,ConversationControllerTest,AiUsageControllerTest,AiTokenUsageServiceTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
-          org.jacoco:jacoco-maven-plugin:0.8.12:check
+          org.jacoco:jacoco-maven-plugin:0.8.12:check@check
 
       - name: Package backend
         run: mvn -B -DskipTests package
@@ -84,12 +84,12 @@ jobs:
       mysql:
         image: mysql:8
         env:
-          MYSQL_ROOT_PASSWORD: PaiSmart2025
-          MYSQL_DATABASE: PaiSmart
+          MYSQL_ROOT_PASSWORD: RoboKnow2025
+          MYSQL_DATABASE: RoboKnow
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -pPaiSmart2025"
+          --health-cmd="mysqladmin ping -h localhost -uroot -pRoboKnow2025"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -107,34 +107,34 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Elasticsearch image with IK analyzer
-        run: docker build -t paismart-es-ik:8.10.4 docker/elasticsearch-ik
+        run: docker build -t roboknow-es-ik:8.10.4 docker/elasticsearch-ik
 
       - name: Start Elasticsearch with IK analyzer
         run: >
           docker run -d
-          --name paismart-es
+          --name roboknow-es
           -p 9200:9200
-          -e ELASTIC_PASSWORD=PaiSmart2025
+          -e ELASTIC_PASSWORD=RoboKnow2025
           -e discovery.type=single-node
           -e xpack.security.enabled=true
           -e xpack.security.http.ssl.enabled=false
           -e ES_JAVA_OPTS="-Xms1g -Xmx1g"
-          paismart-es-ik:8.10.4
+          roboknow-es-ik:8.10.4
 
       - name: Wait for Elasticsearch
         shell: bash
         run: |
           for i in {1..40}; do
-            if curl -fsS -u elastic:PaiSmart2025 http://localhost:9200/_cluster/health >/dev/null; then
-              curl -fsS -u elastic:PaiSmart2025 http://localhost:9200/_analyze \
+            if curl -fsS -u elastic:RoboKnow2025 http://localhost:9200/_cluster/health >/dev/null; then
+              curl -fsS -u elastic:RoboKnow2025 http://localhost:9200/_analyze \
                 -H 'Content-Type: application/json' \
                 -d '{"analyzer":"ik_smart","text":"integration test"}' >/dev/null
               exit 0
             fi
-            docker logs --tail 30 paismart-es || true
+            docker logs --tail 30 roboknow-es || true
             sleep 10
           done
-          docker logs paismart-es || true
+          docker logs roboknow-es || true
           exit 1
 
       - name: Set up JDK
@@ -147,9 +147,9 @@ jobs:
       - name: Run backend integration tests
         env:
           SPRING_PROFILES_ACTIVE: docker
-          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/PaiSmart?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/RoboKnow?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
           SPRING_DATASOURCE_USERNAME: root
-          SPRING_DATASOURCE_PASSWORD: PaiSmart2025
+          SPRING_DATASOURCE_PASSWORD: RoboKnow2025
           SPRING_DATA_REDIS_HOST: localhost
           SPRING_DATA_REDIS_PORT: 6379
           SPRING_DATA_REDIS_PASSWORD: ''
@@ -157,7 +157,7 @@ jobs:
           ELASTICSEARCH_HOST: localhost
           ELASTICSEARCH_PORT: 9200
           ELASTICSEARCH_USERNAME: elastic
-          ELASTICSEARCH_PASSWORD: PaiSmart2025
+          ELASTICSEARCH_PASSWORD: RoboKnow2025
         run: >
           mvn -B
           "-Dtest=SmartPaiApplicationTests,ParseServiceTest,UploadServicePerformanceTest"
@@ -173,7 +173,7 @@ jobs:
 
       - name: Upload Elasticsearch logs
         if: always()
-        run: docker logs paismart-es > elasticsearch-ci.log || true
+        run: docker logs roboknow-es > elasticsearch-ci.log || true
 
       - name: Archive Elasticsearch logs
         if: always()
@@ -332,16 +332,16 @@ jobs:
         run: mvn -B -DskipTests package
 
       - name: Build backend Docker image
-        run: docker build -t paismart-backend:${{ github.sha }} .
+        run: docker build -t roboknow-backend:${{ github.sha }} .
 
       - name: Scan backend image with Trivy
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           scan-type: image
-          image-ref: paismart-backend:${{ github.sha }}
+          image-ref: roboknow-backend:${{ github.sha }}
           format: sarif
           output: trivy-backend-image.sarif
           exit-code: '0'
@@ -357,7 +357,7 @@ jobs:
 
       - name: Scan frontend dependencies with Trivy
         if: always()
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -392,7 +392,7 @@ jobs:
         if: always()
         run: |
           echo "## Docker image" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Built image tag: paismart-backend:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Built image tag: roboknow-backend:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "## Trivy vulnerability scans" >> "$GITHUB_STEP_SUMMARY"
           echo "- Backend image scan report: trivy-backend-image.sarif (category: trivy-backend-image)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Frontend dependency scan report: trivy-frontend-fs.sarif (category: trivy-frontend-fs)" >> "$GITHUB_STEP_SUMMARY"
@@ -425,10 +425,10 @@ jobs:
         run: >
           mvn -B
           org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent
-          "-Dtest=ConversationServiceTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerTest,FirstPhaseControllerTest"
+          "-Dtest=ConversationTurnDispatcherTest,ParseServiceUnitTest,FileTypeValidationServiceTest,AgentStopServiceTest,ToolRegistryTest,LogUtilsTest,ChatHandlerCoverageTest,FirstPhaseControllerTest,AuthControllerTest,UserControllerTest,SearchControllerTest,ChatControllerTest,ConversationControllerTest,AiUsageControllerTest,AiTokenUsageServiceTest"
           test
           org.jacoco:jacoco-maven-plugin:0.8.12:report
-          org.jacoco:jacoco-maven-plugin:0.8.12:check
+          org.jacoco:jacoco-maven-plugin:0.8.12:check@check
 
       - name: Run SonarQube analysis
         if: ${{ env.SONAR_TOKEN != '' }}
@@ -437,5 +437,5 @@ jobs:
           org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar
           -Dsonar.host.url=${SONAR_HOST_URL}
           -Dsonar.token=${SONAR_TOKEN}
-          -Dsonar.projectKey=PaiSmart
+          -Dsonar.projectKey=RoboKnow
           -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml

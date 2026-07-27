@@ -76,8 +76,8 @@ homepage/
 1. **克隆项目**
 
    ```bash
-   git clone https://github.com/itwanger/PaiSmart.git
-   cd PaiSmart/homepage
+   git clone https://github.com/itwanger/RoboKnow.git
+   cd RoboKnow/homepage
    ```
 
 2. **安装依赖**
@@ -145,7 +145,7 @@ particlesJS('particles-js', {
 
 ## 联系方式
 
-- **项目主页**：<https://github.com/itwanger/PaiSmart>
+- **项目主页**：<https://github.com/itwanger/RoboKnow>
 - **作者**：沉默王二
 - **微信**：qing_gee
 - **知识星球**：<https://javabetter.cn/zhishixingqiu/>

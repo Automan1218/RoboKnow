@@ -57,11 +57,11 @@ jobs:
       - name: Stage deploy bundle
         run: |
           mkdir -p deploy-bundle
-          cp target/SmartPAI-*.jar deploy-bundle/app.jar
+          cp target/RoboKnow-*.jar deploy-bundle/app.jar
           cp -r frontend/dist deploy-bundle/dist
           cp docs/docker-compose.yaml deploy-bundle/docker-compose.yaml
           cp deploy/nginx.conf deploy-bundle/nginx.conf
-          cp deploy/paismart.service deploy-bundle/paismart.service
+          cp deploy/roboknow.service deploy-bundle/roboknow.service
           cp deploy/deploy.sh deploy-bundle/deploy.sh
 
       - name: Prepare SSH
@@ -74,9 +74,9 @@ jobs:
       - name: Upload bundle to EC2
         run: |
           rsync -az -e "ssh -i ~/.ssh/ec2_key" \
-            deploy-bundle/ ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/paismart/
+            deploy-bundle/ ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/roboknow/
 
       - name: Run remote deploy
         run: |
           ssh -i ~/.ssh/ec2_key ubuntu@${{ secrets.EC2_HOST }} \
-            'chmod +x /home/ubuntu/paismart/deploy.sh && /home/ubuntu/paismart/deploy.sh'
+            'chmod +x /home/ubuntu/roboknow/deploy.sh && /home/ubuntu/roboknow/deploy.sh'

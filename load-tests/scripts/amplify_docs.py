@@ -29,7 +29,7 @@ CHUNK_SIZE = 5 * 1024 * 1024
 
 SOURCE_FILES = [
     "project-report.md",
-    "project-tasks/PaiSmart_Biweekly_Reports.md",
+    "project-tasks/RoboKnow_Biweekly_Reports.md",
 ]
 
 

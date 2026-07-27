@@ -1,13 +1,13 @@
 [Unit]
-Description=PaiSmart backend (Spring Boot)
+Description=RoboKnow backend (Spring Boot)
 After=network.target docker.service
 Wants=docker.service
 
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/paismart
-ExecStart=/usr/bin/java -jar /home/ubuntu/paismart/app.jar --spring.profiles.active=docker
+WorkingDirectory=/home/ubuntu/roboknow
+ExecStart=/usr/bin/java -jar /home/ubuntu/roboknow/app.jar --spring.profiles.active=docker
 Restart=on-failure
 RestartSec=10
 SuccessExitStatus=143
