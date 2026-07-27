@@ -83,3 +83,6 @@ paismart-*.html
 paismart-*.md
 project-milestones-board.html
 .claude/
+
+# docs (ignore all content)
+/docs/
