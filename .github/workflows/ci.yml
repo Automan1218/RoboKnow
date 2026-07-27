@@ -160,7 +160,7 @@ jobs:
           ELASTICSEARCH_PASSWORD: RoboKnow2025
         run: >
           mvn -B
-          "-Dtest=SmartPaiApplicationTests,ParseServiceTest,UploadServicePerformanceTest"
+          "-Dtest=RoboKnowApplicationTests,ParseServiceTest,UploadServicePerformanceTest"
           test
 
       - name: Upload integration test reports
