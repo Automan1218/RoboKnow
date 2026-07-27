@@ -354,9 +354,6 @@ pnpm install
 pnpm run dev
 ```
 
-## 📄 License
-
-This project is for learning purposes only.
 
 ## ⭐ Show Your Support
 
