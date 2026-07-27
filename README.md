@@ -1,11 +1,7 @@
 # RoboKnow
 
 <p align="center">
-  <strong>🚀 Enterprise-grade RAG Intelligent Knowledge Base System</strong>
-</p>
-
-<p align="center">
-  <a href="./README.md">English</a> | <a href="./README_CN.md">简体中文</a>
+  <strong>🚀 Enterprise-grade RAG + Agent Knowledge Base System</strong>
 </p>
 
 <p align="center">
@@ -20,13 +16,9 @@
 
 ## 📖 Introduction
 
-This is my **personal learning project**, aimed at deeply studying and practicing RAG (Retrieval-Augmented Generation) technology, microservices architecture, and enterprise-level system development.
+This is a personal learning project for deeply studying and practicing RAG (Retrieval-Augmented Generation), agentic tool-calling, and enterprise-level system development.
 
-RoboKnow is an enterprise-grade AI knowledge base management system that leverages Retrieval-Augmented Generation (RAG) technology to provide intelligent document processing and retrieval capabilities.
-
-The core technology stack includes ElasticSearch, Kafka, WebSocket, Spring Security, Docker, MySQL, and Redis.
-
-Its goal is to help enterprises and individuals manage and utilize information in knowledge bases more efficiently. It supports multi-tenant architecture, allows users to query the knowledge base using natural language, and receive AI-generated responses based on their own documents.
+RoboKnow is an enterprise-grade AI knowledge base system that combines Retrieval-Augmented Generation with a ReAct-style agent, hybrid search, and layered conversation memory. It supports multi-tenant architecture, letting users query a knowledge base in natural language and receive AI-generated, document-grounded responses through a persistent, resumable chat session.
 
 ### System Architecture
 
@@ -41,6 +33,7 @@ graph TB
     subgraph Backend["⚙️ Backend (Spring Boot 3.4)"]
         Controller[REST Controllers]
         Service[Business Services]
+        Agent[ReAct Agent + Tools]
         WebSocket[WebSocket Handler]
         Security[Spring Security + JWT]
     end
@@ -56,9 +49,9 @@ graph TB
         Kafka[Apache Kafka]
     end
 
-    subgraph AI["🤖 AI Services"]
-        Embedding[Doubao Embedding API]
-        LLM[DeepSeek / Ollama LLM]
+    subgraph AI["🤖 AI Services (OpenAI)"]
+        Embedding[text-embedding-3-large]
+        LLM[gpt-4o-mini]
     end
 
     Frontend -->|HTTP/WebSocket| Backend
@@ -69,16 +62,18 @@ graph TB
     Service --> MinIO
     Service --> Kafka
     Service --> Embedding
-    WebSocket --> LLM
+    WebSocket --> Agent
+    Agent --> LLM
+    Agent --> ES
     Kafka -->|Async Processing| Service
 ```
 
 The system allows users to:
 
 - Upload and manage various types of documents
-- Automatically process and index document content
-- Query the knowledge base using natural language
-- Receive AI-generated responses based on their own documents
+- Automatically process, chunk, and index document content
+- Query the knowledge base using natural language over a persistent chat session
+- Receive AI-generated responses grounded in retrieved document chunks, with citations
 
 ## 🛠️ Technology Stack
 
@@ -95,7 +90,8 @@ The system allows users to:
 | File Storage | MinIO |
 | Document Parsing | Apache Tika |
 | Security | Spring Security + JWT |
-| AI Integration | DeepSeek API / Local Ollama + Doubao Embedding |
+| AI Integration | OpenAI API (gpt-4o-mini chat + text-embedding-3-large embeddings) |
+| Agent | ReAct-style tool-calling agent (hybrid search, metadata filter, summarization tools) |
 | Real-time Communication | WebSocket |
 | Dependency Management | Maven |
 | Reactive Programming | WebFlux |
@@ -118,16 +114,19 @@ The system allows users to:
 ### Backend Structure
 
 ```bash
-src/main/java/com/yizhaoqi/smartpai/
-├── SmartPaiApplication.java      # Main application entry
-├── client/                       # External API clients
-├── config/                       # Configuration classes
+src/main/java/com/yizhaoqi/roboknow/
+├── RoboKnowApplication.java      # Main application entry
+├── agent/                        # ReAct agent (state, steps, tools)
+│   └── tool/                     # Agent tools: hybrid search, metadata filter, summarization
+├── client/                       # External API clients (OpenAI chat/embedding)
+├── config/                       # Configuration classes (Security, WebClient, etc.)
 ├── consumer/                     # Kafka consumers
 ├── controller/                   # REST API endpoints
-├── entity/                       # Data entities
+├── entity/                       # Search/document DTOs (ES doc, chunk, search req/result)
 ├── exception/                    # Custom exceptions
 ├── handler/                      # WebSocket handlers
-├── model/                        # Domain models
+├── memory/                       # Conversation memory (short/long-term, compression, token budget)
+├── model/                        # JPA entities (User, FileUpload, ConversationSession, etc.)
 ├── repository/                   # Data access layer
 ├── service/                      # Business logic
 └── utils/                        # Utility classes
@@ -139,23 +138,31 @@ src/main/java/com/yizhaoqi/smartpai/
 frontend/
 ├── packages/           # Reusable modules
 ├── public/             # Static assets
-├── src/                # Main application code
+├── src/
 │   ├── assets/         # SVG icons, images
 │   ├── components/     # Vue components
+│   ├── constants/      # Shared constants
+│   ├── enum/           # Enum definitions
+│   ├── hooks/          # Composables
 │   ├── layouts/        # Page layouts
+│   ├── locales/        # i18n resources
+│   ├── plugins/        # Vue plugin setup
 │   ├── router/         # Route configuration
 │   ├── service/        # API integration
-│   ├── store/          # State management
-│   ├── views/          # Page components
-│   └── ...            # Other utilities and configs
-└── ...               # Build configuration files
+│   ├── store/          # Pinia state management
+│   ├── styles/         # Global styles
+│   ├── theme/          # Theme configuration
+│   ├── typings/        # TypeScript type declarations
+│   ├── utils/          # Utility functions
+│   └── views/          # Page components
+└── ...                 # Build configuration files
 ```
 
 ## 🎯 Core Features
 
 ### 📚 Knowledge Base Management
 
-RoboKnow provides complete document upload and parsing functionality, supporting chunked file uploads and resumable transfers, with tag-based organization management. Documents can be public or private and can be associated with specific organization tags for better permission classification.
+RoboKnow provides complete document upload and parsing, supporting chunked file uploads and resumable transfers, with tag-based organization management. Documents can be public or private and associated with organization tags for permission scoping.
 
 #### Document Processing Pipeline
 
@@ -175,7 +182,7 @@ graph LR
     end
 
     subgraph Vector["🔢 Vectorization Phase"]
-        H --> I[Doubao Embedding API]
+        H --> I[OpenAI Embedding API]
         I --> J[Vector Generation]
         J --> K[(Elasticsearch Index)]
     end
@@ -191,9 +198,9 @@ graph LR
     style Meta fill:#fce4ec
 ```
 
-### 🧠 AI-Driven RAG Implementation
+### 🧠 Agentic RAG
 
-The core of RoboKnow is the RAG implementation:
+The core of RoboKnow is a ReAct-style agent that decides when to search, filter, and summarize instead of a single fixed retrieval pass:
 
 #### RAG Chat Flow
 
@@ -201,92 +208,41 @@ The core of RoboKnow is the RAG implementation:
 sequenceDiagram
     participant U as 👤 User
     participant WS as 🔌 WebSocket
-    participant HS as 🔍 Hybrid Search
+    participant AG as 🧭 ReAct Agent
+    participant HS as 🔍 Hybrid Search Tool
     participant ES as 📊 Elasticsearch
-    participant LLM as 🤖 LLM (DeepSeek)
+    participant LLM as 🤖 LLM (gpt-4o-mini)
 
     U->>WS: Send Question
-    WS->>HS: Query with User Context
-    
-    par Vector Search
-        HS->>ES: KNN Vector Search (30x recall)
-    and Text Search
-        HS->>ES: BM25 Text Match
+    WS->>AG: Dispatch turn with session context
+
+    loop Reason-Act steps
+        AG->>LLM: Reason about next action
+        AG->>HS: Invoke tool (search / filter / summarize)
+        HS->>ES: KNN Vector Search + BM25 Text Match
+        ES-->>HS: Merged, rescored results
+        HS-->>AG: Tool result (chunks / summary)
     end
-    
-    ES-->>HS: Merged Results
-    HS->>HS: Rescore & Re-rank
-    HS-->>WS: Top-K Relevant Chunks
-    
-    WS->>WS: Inject Context into Prompt
-    WS->>LLM: Send Augmented Prompt
-    LLM-->>WS: Stream Response
-    WS-->>U: Real-time Typing Effect
+
+    AG->>AG: Ground answer in retrieved chunks
+    AG->>LLM: Generate final response
+    LLM-->>WS: Stream response
+    WS-->>U: Real-time typing effect
 ```
 
-- Semantic chunking of uploaded documents
-- Calling Doubao Embedding model to generate high-dimensional vectors for each text chunk
-- Storing vectors in ElasticSearch to support semantic search and keyword search
-- Retrieving relevant documents based on user queries
-- Providing complete context to LLM to generate more accurate, document-based responses
+- Semantic chunking of uploaded documents (parent-child strategy)
+- OpenAI `text-embedding-3-large` embeddings for each chunk
+- Vectors stored in Elasticsearch, combined with BM25 for hybrid recall
+- Agent tools (`HybridSearchTool`, `MetadataFilterTool`, `SummarizationTool`) let the model decide what to retrieve and when
+- Conversation memory (short-term session context + long-term user facts, with token-budget-aware compression) keeps multi-turn chats grounded without blowing the context window
 
 ### 🏢 Enterprise Multi-tenancy
 
-RoboKnow supports multi-tenant architecture through organization tags. Each user can create or join one or more organizations, and each organization can have independent knowledge bases and document management.
+RoboKnow supports multi-tenant architecture through organization tags. Each user can create or join one or more organizations, each with independent knowledge bases and document management, so multiple teams can share the same deployment without data or permission bleed-through.
 
-#### Security & Access Control Architecture
+### 💬 Real-time, Persistent Conversations
 
-```mermaid
-graph TB
-    subgraph Auth["🔐 Authentication Layer"]
-        JWT[JWT Dual-Token]
-        AT[Access Token]
-        RT[Refresh Token]
-        BL[Token Blacklist]
-        JWT --> AT
-        JWT --> RT
-        AT --> BL
-    end
-
-    subgraph RBAC["👥 Authorization Layer"]
-        Admin[Admin Role]
-        User[User Role]
-        API[API Permissions]
-        Admin --> API
-        User --> API
-    end
-
-    subgraph MultiTenant["🏢 Multi-Tenant Isolation"]
-        OrgTag[Organization Tags]
-        Private[Private Documents]
-        OrgDocs[Organization Documents]
-        Public[Public Documents]
-        OrgTag --> Private
-        OrgTag --> OrgDocs
-        OrgTag --> Public
-    end
-
-    subgraph Filter["🛡️ Security Filters"]
-        JWTFilter[JWT Auth Filter]
-        OrgFilter[OrgTag Auth Filter]
-        JWTFilter --> OrgFilter
-    end
-
-    Auth --> Filter
-    RBAC --> Filter
-    Filter --> MultiTenant
-
-    style Auth fill:#ffebee
-    style RBAC fill:#e3f2fd
-    style MultiTenant fill:#e8f5e9
-    style Filter fill:#fff3e0
-```
-
-This allows enterprises to manage knowledge bases for multiple teams or departments within the same system without worrying about data confusion or permission issues.
-
-### 💬 Real-time Communication
-
-The system uses WebSocket technology to provide real-time interaction between users and the AI system, supporting responsive chat interfaces for knowledge retrieval and AI interaction.
+The system uses WebSocket for real-time chat, with conversation turns persisted server-side (commit-then-push) so sessions survive reconnects and can be resumed, listed, and switched between via the conversation API.
 
 ## 📋 Prerequisites
 
@@ -302,10 +258,9 @@ Before getting started, please ensure the following software is installed:
 - Kafka 3.2.1
 - Redis 7.0.11
 - Docker (optional, for running Redis, MinIO, Elasticsearch, and Kafka services)
+- An OpenAI API key (chat completions + embeddings)
 
 ## 🏗️ Architecture Design
-
-RoboKnow's architecture features a modern, cloud-native application with clear separation of concerns, scalable components, and integration with AI technology. The modular design allows for future expansion and replacement of individual components as technology evolves, especially in the rapidly changing field of AI integration.
 
 ### Layered Architecture
 
@@ -319,7 +274,8 @@ graph TB
     subgraph Business["⚙️ Business Layer"]
         DocSvc[Document Service]
         SearchSvc[Hybrid Search Service]
-        ChatSvc[Chat Handler]
+        AgentSvc[ReAct Agent Service]
+        MemSvc[Memory Manager]
         AuthSvc[User Service]
         UploadSvc[Upload Service]
     end
@@ -335,7 +291,7 @@ graph TB
         ESClient[Elasticsearch Client]
         MinIOClient[MinIO Client]
         KafkaProducer[Kafka Producer]
-        EmbeddingClient[Embedding Client]
+        OpenAIClient[OpenAI Client]
     end
 
     Presentation --> Business
@@ -352,86 +308,19 @@ graph TB
     style External fill:#fce4ec
 ```
 
-### Controller Layer
+### Key REST Endpoints
 
-Handles HTTP requests, validates input, manages request/response formatting, and delegates business logic to the service layer. Controllers are organized by domain functionality. Following RESTful design principles, with integrated performance monitoring and logging for tracking API usage and troubleshooting.
-
-```java
-@RestController
-@RequestMapping("/api/v1/documents")
-public class DocumentController {
-    @Autowired
-    private DocumentService documentService;
-    
-    @DeleteMapping("/{fileMd5}")
-    public ResponseEntity<?> deleteDocument(
-            @PathVariable String fileMd5,
-            @RequestAttribute("userId") String userId,
-            @RequestAttribute("role") String role) {
-        // Parameter validation and delegation to service
-        documentService.deleteDocument(fileMd5);
-        // Response handling
-    }
-}
-```
-
-### Service Layer
-
-Primarily handles application business logic, with transaction awareness and the ability to handle operations across multiple data sources.
-
-```java
-@Service
-public class DocumentService {
-    @Autowired
-    private FileUploadRepository fileUploadRepository;
-    
-    @Autowired
-    private MinioClient minioClient;
-    
-    @Autowired
-    private ElasticsearchService elasticsearchService;
-    
-    @Transactional
-    public void deleteDocument(String fileMd5) {
-        // Business logic for document deletion
-        // Coordinating multiple repositories and systems
-    }
-}
-```
-
-### Data Access Layer
-
-Uses Spring Data JPA for database operations, providing CRUD operations for MySQL.
-
-```java
-@Repository
-public interface FileUploadRepository extends JpaRepository<FileUpload, Long> {
-    Optional<FileUpload> findByFileMd5(String fileMd5);
-    
-    @Query("SELECT f FROM FileUpload f WHERE f.userId = :userId OR f.isPublic = true OR (f.orgTag IN :orgTagList AND f.isPublic = false)")
-    List<FileUpload> findAccessibleFilesWithTags(@Param("userId") String userId, @Param("orgTagList") List<String> orgTagList);
-}
-```
-
-### Entity Layer
-
-Consists of JPA entities mapped to database tables and DTOs (Data Transfer Objects) for API requests and responses.
-
-```java
-@Entity
-public class FileUpload {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    private String fileMd5;
-    private String fileName;
-    private String userId;
-    private boolean isPublic;
-    private String orgTag;
-    // Other fields and methods
-}
-```
+| Area | Base Path | Examples |
+|------|-----------|----------|
+| Auth | `/api/v1/auth` | refresh token |
+| Users | `/api/v1/users` | register, login, `me`, org tags, logout |
+| Documents | `/api/v1/documents` | delete, accessible list, uploads, download, preview, stream |
+| Upload | `/api/v1/upload` | chunked upload, status, merge, supported types |
+| Search | `/api/v1/search` | `/hybrid` |
+| Chat | `/api/v1/chat` | websocket token issuance |
+| Conversation | `/api/v1/users/conversation` | list, sessions, switch, delete |
+| Admin | `/api/v1/admin` | users, org tags, knowledge base, system status |
+| AI Usage | `/api/v1/ai/usage` | token usage reporting |
 
 ## 🚀 Quick Start
 
@@ -439,15 +328,16 @@ public class FileUpload {
 
 ```bash
 # Clone the project
-git clone https://github.com/your-username/roboknow.git
+git clone git@github.com:Automan1218/RoboKnow.git
 
-# Navigate to backend directory
-cd roboknow
+# Navigate to project directory
+cd RoboKnow
 
-# Start dependency services (Docker Compose)
-docker-compose up -d
+# Start dependency services (MySQL, Redis, MinIO, Elasticsearch, Kafka)
+docker-compose -f docs/docker-compose.yaml up -d
 
-# Build and run
+# Set required environment variables (JWT secret, OpenAI key, DB credentials, ...)
+# then build and run
 mvn spring-boot:run
 ```
 
