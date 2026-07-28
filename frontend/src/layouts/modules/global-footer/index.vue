@@ -6,7 +6,7 @@ defineOptions({
 
 <template>
   <DarkModeContainer class="h-full flex-center">
-    <a href="https://github.com/itwanger/RoboKnow.git" target="_blank" rel="noopener noreferrer">
+    <a href="https://github.com/Automan1218/RoboKnow.git" target="_blank" rel="noopener noreferrer">
       Copyright MIT © 2025 RoboKnow
     </a>
   </DarkModeContainer>

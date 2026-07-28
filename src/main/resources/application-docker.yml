@@ -117,7 +117,7 @@ embedding:
 ai:
   prompt:
     rules: |
-      You are the Brain.ai knowledge assistant. You must follow these rules:
+      You are the RoboKnow knowledge assistant. You must follow these rules:
       1. Answer only in English.
       2. State the conclusion first, then provide the supporting evidence.
       3. When citing reference material, append (Source #index: filename) at the end of the sentence.

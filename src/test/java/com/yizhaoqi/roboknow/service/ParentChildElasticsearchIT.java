@@ -178,7 +178,7 @@ class ParentChildElasticsearchIT {
 
     private static ElasticsearchClient buildClient() {
         BasicCredentialsProvider creds = new BasicCredentialsProvider();
-        creds.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials("elastic", "PaiSmart2025"));
+        creds.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials("elastic", "RoboKnow2025"));
         RestClient restClient = RestClient.builder(new HttpHost("localhost", 9200, "http"))
                 .setHttpClientConfigCallback(b -> b.setDefaultCredentialsProvider(creds))
                 .build();

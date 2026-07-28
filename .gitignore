@@ -81,8 +81,14 @@ src/main/resources/application.yml~
 *.pdf
 paismart-*.html
 paismart-*.md
+paismart-*.drawio
 project-milestones-board.html
 .claude/
 
 # docs (ignore all content)
 /docs/
+
+# Leftover template/tutorial artifacts not part of this project
+/homepage/
+/design/
+.qoder/
