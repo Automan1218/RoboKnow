@@ -19,7 +19,7 @@ concurrency:
 env:
   JAVA_VERSION: '17'
   NODE_VERSION: '18'
-  PNPM_VERSION: '8'
+  PNPM_VERSION: '9.15.9'
 
 jobs:
   publish-and-deploy:
