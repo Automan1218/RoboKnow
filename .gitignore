@@ -85,10 +85,23 @@ paismart-*.drawio
 project-milestones-board.html
 .claude/
 
-# docs (ignore all content)
-/docs/
+# docs (ignore all content except the deployment Compose file)
+/docs/*
+!/docs/
+!/docs/docker-compose.yaml
 
 # Leftover template/tutorial artifacts not part of this project
 /homepage/
 /design/
 .qoder/
+
+# Local architecture/review artifacts and task planning files
+/AGENTS.md
+/findings.md
+/progress.md
+/task_plan.md
+/Video_Software_Design_Assessment/
+/load-tests/data/recall-*.json
+/load-tests/scratch/
+/deploy/backend.env
+/deploy/.previous_backend_image

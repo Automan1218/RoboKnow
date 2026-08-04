@@ -79,7 +79,6 @@ jobs:
     name: Backend integration test
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: true
     services:
       mysql:
         image: mysql:8
@@ -195,11 +194,56 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           find target/surefire-reports -maxdepth 1 -type f 2>/dev/null | sort | head -100 || true
 
+  frontend-quality:
+    name: Frontend typecheck, lint, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        continue-on-error: true
+        run: pnpm typecheck
+
+      - name: Lint frontend
+        working-directory: frontend
+        continue-on-error: true
+        run: pnpm exec eslint .
+
+      - name: Record frontend baseline status
+        if: always()
+        run: |
+          {
+            echo "## Frontend checks"
+            echo "- Production build is the blocking frontend gate."
+            echo "- Typecheck and lint run for visibility and currently report existing repository baseline issues."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm build
+
   backend-static-analysis:
     name: Backend static analysis
     runs-on: ubuntu-latest
     needs: backend-build-and-test
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -212,13 +256,11 @@ jobs:
           cache: maven
 
       - name: Run Checkstyle report
-        continue-on-error: true
         run: >
           mvn -B
           org.apache.maven.plugins:maven-checkstyle-plugin:3.5.0:checkstyle
 
       - name: Run SpotBugs report
-        continue-on-error: true
         run: >
           mvn -B
           com.github.spotbugs:spotbugs-maven-plugin:4.8.6.6:spotbugs
@@ -336,7 +378,6 @@ jobs:
 
       - name: Scan backend image with Trivy
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -344,7 +385,9 @@ jobs:
           image-ref: roboknow-backend:${{ github.sha }}
           format: sarif
           output: trivy-backend-image.sarif
-          exit-code: '0'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
           scanners: vuln
 
       - name: Upload backend image Trivy SARIF
@@ -358,7 +401,6 @@ jobs:
       - name: Scan frontend dependencies with Trivy
         if: always()
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -366,7 +408,9 @@ jobs:
           scan-ref: frontend
           format: sarif
           output: trivy-frontend-fs.sarif
-          exit-code: '0'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
           scanners: vuln
 
       - name: Upload frontend dependency Trivy SARIF
@@ -439,3 +483,33 @@ jobs:
           -Dsonar.token=${SONAR_TOKEN}
           -Dsonar.projectKey=RoboKnow
           -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+
+  quality-gate:
+    name: Required CI quality gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - backend-build-and-test
+      - backend-integration-test
+      - frontend-quality
+      - backend-static-analysis
+      - docker-image-build
+    steps:
+      - name: Verify required jobs succeeded
+        shell: bash
+        run: |
+          set -euo pipefail
+          results=(
+            "backend-build-and-test=${{ needs.backend-build-and-test.result }}"
+            "backend-integration-test=${{ needs.backend-integration-test.result }}"
+            "frontend-quality=${{ needs.frontend-quality.result }}"
+            "backend-static-analysis=${{ needs.backend-static-analysis.result }}"
+            "docker-image-build=${{ needs.docker-image-build.result }}"
+          )
+          printf '%s\n' "${results[@]}"
+          for result in "${results[@]}"; do
+            if [[ "$result" != *=success ]]; then
+              echo "Required CI job did not succeed: $result"
+              exit 1
+            fi
+          done
