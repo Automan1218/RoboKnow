@@ -19,6 +19,8 @@ env:
   JAVA_VERSION: '17'
   NODE_VERSION: '18'
   PNPM_VERSION: '9.15.9'
+  EC2_HOST: ${{ vars.EC2_HOST }}
+  EC2_SSH_PORT: ${{ vars.EC2_SSH_PORT || '22' }}
 
 jobs:
   build-and-deploy:
@@ -89,21 +91,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "$EC2_HOST" ]]; then
+            echo "::error::Repository variable EC2_HOST is required. Set it to the EC2 hostname or IP address."
+            exit 1
+          fi
+          if [[ ! "$EC2_SSH_PORT" =~ ^[0-9]+$ ]] || (( EC2_SSH_PORT < 1 || EC2_SSH_PORT > 65535 )); then
+            echo "::error::Repository variable EC2_SSH_PORT must be a valid TCP port."
+            exit 1
+          fi
+          if [[ -z "${{ secrets.EC2_SSH_KEY }}" ]]; then
+            echo "::error::Repository secret EC2_SSH_KEY is required."
+            exit 1
+          fi
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -p "$EC2_SSH_PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Upload deployment bundle
         shell: bash
         run: |
-          rsync -az -e "ssh -i ~/.ssh/ec2_key" \
-            deploy-bundle/ ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/paismart/
+          rsync -az -e "ssh -i ~/.ssh/ec2_key -p $EC2_SSH_PORT" \
+            deploy-bundle/ "ubuntu@${EC2_HOST}:/home/ubuntu/paismart/"
 
       - name: Deploy with systemd
         shell: bash
         run: |
-          ssh -i ~/.ssh/ec2_key ubuntu@${{ secrets.EC2_HOST }} \
+          ssh -i ~/.ssh/ec2_key -p "$EC2_SSH_PORT" "ubuntu@${EC2_HOST}" \
             'chmod +x /home/ubuntu/paismart/deploy.sh /home/ubuntu/paismart/rollback.sh && \
              /home/ubuntu/paismart/deploy.sh'
 
