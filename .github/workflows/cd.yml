@@ -119,7 +119,9 @@ jobs:
       - name: Deploy with systemd
         shell: bash
         run: |
-          ssh -i ~/.ssh/ec2_key -p "$EC2_SSH_PORT" "ubuntu@${EC2_HOST}" \
+          ssh -i ~/.ssh/ec2_key -p "$EC2_SSH_PORT" \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "ubuntu@${EC2_HOST}" \
             'chmod +x /home/ubuntu/paismart/deploy.sh /home/ubuntu/paismart/rollback.sh && \
              /home/ubuntu/paismart/deploy.sh'
 
