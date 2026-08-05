@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.2</version>
+        <version>3.5.14</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.yizhaoqi</groupId>
@@ -29,6 +29,11 @@
     <properties>
         <java.version>17</java.version>
         <lombok.version>1.18.36</lombok.version>
+        <netty.version>4.1.136.Final</netty.version>
+        <tomcat.version>10.1.55</tomcat.version>
+        <spring-framework.version>6.2.19</spring-framework.version>
+        <spring-security.version>6.5.9</spring-security.version>
+        <kafka.version>3.9.2</kafka.version>
     </properties>
     <dependencies>
         <dependency>
@@ -108,7 +113,14 @@
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
-            <version>8.5.12</version>
+            <version>8.6.0</version>
+        </dependency>
+        <!-- MinIO 8.6.x publishes an OkHttp multiplatform metadata artifact;
+             Maven consumers also need the JVM implementation at compile time. -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+            <version>5.1.0</version>
         </dependency>
         <!-- Apache Commons Codec (用于 MD5 校验) -->
         <dependency>
@@ -120,12 +132,12 @@
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-core</artifactId>
-            <version>2.9.1</version>
+            <version>3.2.2</version>
         </dependency>
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-parsers-standard-package</artifactId>
-            <version>2.9.1</version>
+            <version>3.2.2</version>
         </dependency>
         <!-- Apache Commons IO -->
         <dependency>
@@ -136,7 +148,7 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
-            <version>3.2.1</version>
+            <version>3.3.16</version>
         </dependency>
 
         <!-- Elasticsearch Java Client -->
@@ -144,13 +156,6 @@
             <groupId>co.elastic.clients</groupId>
             <artifactId>elasticsearch-java</artifactId>
             <version>8.10.0</version>
-        </dependency>
-
-        <!-- Jackson for JSON Processing -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>2.15.2</version>
         </dependency>
 
         <!-- Apache HttpClient (used internally by Elasticsearch client) -->
