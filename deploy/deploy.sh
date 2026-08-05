@@ -89,7 +89,13 @@ sudo sysctl -w vm.max_map_count=262144 >/dev/null
 
 echo "==> Start infrastructure containers"
 remove_stopped_legacy_containers
-compose up -d mysql redis kafka es minio ocr-service
+services=(mysql redis es minio ocr-service)
+if [[ "$(sudo docker inspect --format '{{.State.Status}}' kafka 2>/dev/null || true)" == "running" ]]; then
+  echo "==> Reusing running legacy Kafka container"
+else
+  services+=(kafka)
+fi
+compose up -d "${services[@]}"
 wait_for_container_health mysql 60
 wait_for_container_health redis 60
 wait_for_container_health kafka 60
