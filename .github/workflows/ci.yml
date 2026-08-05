@@ -136,6 +136,29 @@ jobs:
           docker logs roboknow-es || true
           exit 1
 
+      - name: Start MinIO
+        run: >
+          docker run -d
+          --name roboknow-minio
+          -p 19000:19000
+          -e MINIO_ROOT_USER=minioadmin
+          -e MINIO_ROOT_PASSWORD=minioadmin
+          minio/minio:RELEASE.2025-04-22T22-12-26Z
+          server /data --address ":19000" --console-address ":19001"
+
+      - name: Wait for MinIO
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:19000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            docker logs --tail 30 roboknow-minio || true
+            sleep 2
+          done
+          docker logs roboknow-minio || true
+          exit 1
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -153,6 +176,8 @@ jobs:
           SPRING_DATA_REDIS_PORT: 6379
           SPRING_DATA_REDIS_PASSWORD: ''
           SPRING_KAFKA_ENABLED: 'false'
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
           ELASTICSEARCH_HOST: localhost
           ELASTICSEARCH_PORT: 9200
           ELASTICSEARCH_USERNAME: elastic
@@ -174,12 +199,24 @@ jobs:
         if: always()
         run: docker logs roboknow-es > elasticsearch-ci.log || true
 
+      - name: Upload MinIO logs
+        if: always()
+        run: docker logs roboknow-minio > minio-ci.log || true
+
       - name: Archive Elasticsearch logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: elasticsearch-integration-logs
           path: elasticsearch-ci.log
+          if-no-files-found: warn
+
+      - name: Archive MinIO logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minio-integration-logs
+          path: minio-ci.log
           if-no-files-found: warn
 
       - name: Summarize integration reports
@@ -447,7 +484,9 @@ jobs:
     name: SonarQube analysis
     runs-on: ubuntu-latest
     needs: backend-build-and-test
-    if: ${{ vars.SONAR_HOST_URL != '' }}
+    # SonarCloud Automatic Analysis is the default. Set SONAR_CI_ENABLED=true
+    # only after disabling Automatic Analysis in the SonarCloud project settings.
+    if: ${{ vars.SONAR_HOST_URL != '' && vars.SONAR_CI_ENABLED == 'true' }}
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
