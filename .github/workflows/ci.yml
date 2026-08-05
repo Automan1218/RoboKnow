@@ -254,6 +254,11 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      # Vite generates the auto-import declaration files consumed by vue-tsc.
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm build
+
       - name: Typecheck frontend
         working-directory: frontend
         run: pnpm typecheck
@@ -269,10 +274,6 @@ jobs:
             echo "## Frontend checks"
             echo "- Typecheck, lint, and production build are required quality gates."
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Build frontend
-        working-directory: frontend
-        run: pnpm build
 
   backend-static-analysis:
     name: Backend static analysis
