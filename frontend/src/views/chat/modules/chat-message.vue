@@ -1,5 +1,4 @@
-﻿<script setup lang="ts">
-import { nextTick } from 'vue';
+<script setup lang="ts">
 import { VueMarkdownIt } from 'vue-markdown-shiki';
 import { formatDate } from '@/utils/common';
 import AgentReasoning from './agent-reasoning.vue';

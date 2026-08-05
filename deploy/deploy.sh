@@ -90,7 +90,7 @@ sudo sysctl -w vm.max_map_count=262144 >/dev/null
 echo "==> Start infrastructure containers"
 remove_stopped_legacy_containers
 services=()
-for service in mysql redis kafka es minio ocr-service; do
+for service in mysql redis kafka es minio; do
   if [[ "$(sudo docker inspect --format '{{.State.Status}}' "$service" 2>/dev/null || true)" == "running" ]]; then
     echo "==> Reusing running legacy container: $service"
   else
@@ -100,11 +100,17 @@ done
 if (( ${#services[@]} > 0 )); then
   compose up -d "${services[@]}"
 fi
+
+# Rebuild OCR on every release so service-code and image changes take effect.
+# The named ocr-data volume preserves downloaded PaddleOCR models across recreates.
+compose up -d --build --force-recreate ocr-service
+
 wait_for_container_health mysql 60
 wait_for_container_health redis 60
 wait_for_container_health kafka 60
 wait_for_container_health es 60
-wait_for_container_health ocr-service 60
+# A first run may download PaddleOCR models before the HTTP health endpoint is ready.
+wait_for_container_health ocr-service 180
 
 echo "==> Rotate and install backend JAR"
 if [[ -f "$CURRENT_JAR" ]]; then cp "$CURRENT_JAR" "$PREVIOUS_JAR"; fi
@@ -120,7 +126,7 @@ if ! wait_for_backend_http; then
 fi
 
 echo "==> Ensure MinIO bucket exists"
-sudo docker run --rm --network paismart_default --entrypoint sh minio/mc -c \
+sudo docker run --rm --network roboknow_default --entrypoint sh minio/mc -c \
   "mc alias set m http://minio:19000 \"$MINIO_ROOT_USER\" \"$MINIO_ROOT_PASSWORD\" && mc mb -p m/uploads" || true
 
 echo "==> Publish frontend via Nginx"

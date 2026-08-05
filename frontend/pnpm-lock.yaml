@@ -199,9 +199,6 @@ importers:
       vite-plugin-forvmsc:
         specifier: ^1.0.6
         version: 1.0.6(vue-markdown-shiki@2.0.0(@types/markdown-it@14.1.2))
-      vite-plugin-progress:
-        specifier: 0.0.7
-        version: 0.0.7(vite@6.3.5(@types/node@22.15.17)(jiti@2.7.0)(sass@1.88.0)(tsx@4.19.4)(yaml@2.9.0))
       vite-plugin-svg-icons:
         specifier: 2.0.1
         version: 2.0.1(vite@6.3.5(@types/node@22.15.17)(jiti@2.7.0)(sass@1.88.0)(tsx@4.19.4)(yaml@2.9.0))
@@ -1247,9 +1244,6 @@ packages:
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
-
-  '@types/node@10.17.60':
-    resolution: {integrity: sha512-F0KIgDJfy2nA3zMLmWGKxcH2ZVEtCZXHHdOQs2gSaQ27+lNeEfGxzkIw90aXswATX7AZ33tahPbzy6KAfUreVw==}
 
   '@types/node@22.15.17':
     resolution: {integrity: sha512-wIX2aSZL5FE+MR0JlvF87BNVrtFWf6AE6rxSE9X7OwnVvoyCQjpzSRJ+M87se/4QCkCiebQAqrJ0y6fwIyi7nw==}
@@ -3764,10 +3758,6 @@ packages:
     resolution: {integrity: sha512-gjVS5hOP+M3wMm5nmNOucbIrqudzs9v/57bWRHQWLYklXqoXKrVfYW2W9+glfGsqtPgpiz5WwyEEB+ksXIx3gQ==}
     engines: {node: '>=18'}
 
-  progress@2.0.3:
-    resolution: {integrity: sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==}
-    engines: {node: '>=0.4.0'}
-
   prompts@2.4.2:
     resolution: {integrity: sha512-NxNv/kLguCA7p3jE8oL2aEBsrJWgAakBpgmgK6lpPWV+WuOmY6r2/zbAVnP+T8bQlA0nzHXSJSJW0Hq7ylaD2Q==}
     engines: {node: '>= 6'}
@@ -3825,9 +3815,6 @@ packages:
 
   rc9@2.1.2:
     resolution: {integrity: sha512-btXCnMmRIBINM2LDZoEmOogIZU7Qe7zn4BpomSKZ/ykbLObuBdvG+mFq11DL6fjH1DRwHhrlgtYWG96bJiC7Cg==}
-
-  rd@2.0.1:
-    resolution: {integrity: sha512-/XdKU4UazUZTXFmI0dpABt8jSXPWcEyaGdk340KdHnsEOdkTctlX23aAK7ChQDn39YGNlAJr1M5uvaKt4QnpNw==}
 
   read-package-up@11.0.0:
     resolution: {integrity: sha512-MbgfoNPANMdb4oRBNg5eqLbB2t2r+o5Ua1pNt8BqGp4I0FJZhuVSOj3PaBPni4azWuSzEdNn2evevzVmEk1ohQ==}
@@ -4526,12 +4513,6 @@ packages:
     peerDependenciesMeta:
       '@nuxt/kit':
         optional: true
-
-  vite-plugin-progress@0.0.7:
-    resolution: {integrity: sha512-zyvKdcc/X+6hnw3J1HVV1TKrlFKC4Rh8GnDnWG/2qhRXjqytTcM++xZ+SAPnoDsSyWl8O93ymK0wZRgHAoglEQ==}
-    engines: {node: '>=14', pnpm: '>=7.0.0'}
-    peerDependencies:
-      vite: '>2.0.0-0'
 
   vite-plugin-svg-icons@2.0.1:
     resolution: {integrity: sha512-6ktD+DhV6Rz3VtedYvBKKVA2eXF+sAQVaKkKLDSqGUfnhqXl3bj5PPkVTl3VexfTuZy66PmINi8Q6eFnVfRUmA==}
@@ -5629,8 +5610,6 @@ snapshots:
   '@types/mdurl@2.0.0': {}
 
   '@types/ms@2.1.0': {}
-
-  '@types/node@10.17.60': {}
 
   '@types/node@22.15.17':
     dependencies:
@@ -8585,8 +8564,6 @@ snapshots:
     dependencies:
       parse-ms: 4.0.0
 
-  progress@2.0.3: {}
-
   prompts@2.4.2:
     dependencies:
       kleur: 3.0.3
@@ -8640,10 +8617,6 @@ snapshots:
     dependencies:
       defu: 6.1.5
       destr: 2.0.5
-
-  rd@2.0.1:
-    dependencies:
-      '@types/node': 10.17.60
 
   read-package-up@11.0.0:
     dependencies:
@@ -9511,13 +9484,6 @@ snapshots:
     transitivePeerDependencies:
       - rollup
       - supports-color
-
-  vite-plugin-progress@0.0.7(vite@6.3.5(@types/node@22.15.17)(jiti@2.7.0)(sass@1.88.0)(tsx@4.19.4)(yaml@2.9.0)):
-    dependencies:
-      picocolors: 1.1.1
-      progress: 2.0.3
-      rd: 2.0.1
-      vite: 6.3.5(@types/node@22.15.17)(jiti@2.7.0)(sass@1.88.0)(tsx@4.19.4)(yaml@2.9.0)
 
   vite-plugin-svg-icons@2.0.1(vite@6.3.5(@types/node@22.15.17)(jiti@2.7.0)(sass@1.88.0)(tsx@4.19.4)(yaml@2.9.0)):
     dependencies:

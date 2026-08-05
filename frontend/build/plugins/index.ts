@@ -1,7 +1,6 @@
 import type { PluginOption } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import vueJsx from '@vitejs/plugin-vue-jsx';
-import progress from 'vite-plugin-progress';
 import { copyPublicPlugin } from 'vite-plugin-forvmsc';
 import { setupElegantRouter } from './router';
 import { setupUnocss } from './unocss';
@@ -16,7 +15,6 @@ export function setupVitePlugins(viteEnv: Env.ImportMeta, buildTime: string) {
     setupElegantRouter(),
     setupUnocss(viteEnv),
     ...setupUnplugin(viteEnv),
-    progress(),
     setupHtmlPlugin(buildTime),
     copyPublicPlugin()
   ];

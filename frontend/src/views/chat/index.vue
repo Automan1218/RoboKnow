@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { NDrawer, NDrawerContent } from 'naive-ui';
+import { useAppStore } from '@/store/modules/app';
+import FilePreview from '@/components/custom/file-preview.vue';
 import ChatList from './modules/chat-list.vue';
 import InputBox from './modules/input-box.vue';
 import SessionList from './modules/session-list.vue';
-import FilePreview from '@/components/custom/file-preview.vue';
-import { useAppStore } from '@/store/modules/app';
 
 const chatStore = useChatStore();
 const appStore = useAppStore();
 
-const previewVisible = computed(() => !!chatStore.previewFileName);
+const previewVisible = computed(() => Boolean(chatStore.previewFileName));
 
 function closePreview() {
   chatStore.previewFileName = '';

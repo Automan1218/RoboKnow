@@ -256,21 +256,18 @@ jobs:
 
       - name: Typecheck frontend
         working-directory: frontend
-        continue-on-error: true
         run: pnpm typecheck
 
       - name: Lint frontend
         working-directory: frontend
-        continue-on-error: true
         run: pnpm exec eslint .
 
-      - name: Record frontend baseline status
+      - name: Summarize frontend quality checks
         if: always()
         run: |
           {
             echo "## Frontend checks"
-            echo "- Production build is the blocking frontend gate."
-            echo "- Typecheck and lint run for visibility and currently report existing repository baseline issues."
+            echo "- Typecheck, lint, and production build are required quality gates."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build frontend

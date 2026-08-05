@@ -161,6 +161,8 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    volumes:
+      - ocr-data:/root/.paddleocr
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -174,3 +176,4 @@ volumes:
   minio-data:
   kafka-data:
   es-data:
+  ocr-data:

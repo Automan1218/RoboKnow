@@ -8,6 +8,7 @@
 "*.html"   eol=lf
 "*.css"    eol=lf
 "*.scss"   eol=lf
+"*.sh"     eol=lf
 "*.md"     eol=lf
 "*.yaml"   eol=lf
 "*.yml"    eol=lf
