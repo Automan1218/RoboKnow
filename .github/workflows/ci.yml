@@ -425,6 +425,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
           scanners: vuln
 
       - name: Upload backend image Trivy SARIF
@@ -448,6 +449,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
           scanners: vuln
 
       - name: Upload frontend dependency Trivy SARIF
