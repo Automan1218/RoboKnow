@@ -27,6 +27,17 @@ compose() {
   sudo docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
+remove_stopped_legacy_containers() {
+  local container state
+  for container in mysql minio redis kafka es ocr-service; do
+    state="$(sudo docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null || true)"
+    if [[ -n "$state" && "$state" != "running" ]]; then
+      echo "==> Removing stopped legacy container: $container ($state)"
+      sudo docker rm "$container" >/dev/null
+    fi
+  done
+}
+
 wait_for_container_health() {
   local container="$1"
   local attempts="${2:-60}"
@@ -77,6 +88,7 @@ fi
 sudo sysctl -w vm.max_map_count=262144 >/dev/null
 
 echo "==> Start infrastructure containers"
+remove_stopped_legacy_containers
 compose up -d mysql redis kafka es minio ocr-service
 wait_for_container_health mysql 60
 wait_for_container_health redis 60
