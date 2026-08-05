@@ -1,0 +1,17 @@
+[Unit]
+Description=PaiSmart backend (Spring Boot)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/paismart
+EnvironmentFile=-/home/ubuntu/paismart/backend.env
+ExecStart=/usr/bin/java -jar /home/ubuntu/paismart/app.jar --spring.profiles.active=docker
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

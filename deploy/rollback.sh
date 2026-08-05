@@ -2,26 +2,17 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="$APP_DIR/docker-compose.yaml"
-ENV_FILE="$APP_DIR/backend.env"
-STATE_FILE="$APP_DIR/.previous_backend_image"
+CURRENT_JAR="$APP_DIR/app.jar"
+PREVIOUS_JAR="$APP_DIR/.previous_app.jar"
 
-if [[ ! -f "$ENV_FILE" || ! -f "$STATE_FILE" ]]; then
-  echo "No deploy environment or previous image state was found." >&2
+if [[ ! -f "$PREVIOUS_JAR" ]]; then
+  echo "No previous JAR found: $PREVIOUS_JAR" >&2
   exit 1
 fi
 
-previous_image="$(tr -d '\r\n' < "$STATE_FILE")"
-if [[ -z "$previous_image" ]]; then
-  echo "Previous image state is empty." >&2
-  exit 1
-fi
-
-echo "Rolling back backend to $previous_image"
-sudo env ROBO_BACKEND_IMAGE="$previous_image" docker compose \
-  --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull backend
-sudo env ROBO_BACKEND_IMAGE="$previous_image" docker compose \
-  --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d backend
+cp "$CURRENT_JAR" "$APP_DIR/.failed_app.jar" 2>/dev/null || true
+cp "$PREVIOUS_JAR" "$CURRENT_JAR"
+sudo systemctl restart paismart.service
 
 for _ in $(seq 1 60); do
   code="$(curl -sS --connect-timeout 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/ || true)"
@@ -32,6 +23,6 @@ for _ in $(seq 1 60); do
   sleep 5
 done
 
-echo "Rollback image did not accept HTTP connections." >&2
-sudo docker logs --tail 100 roboknow-backend || true
+echo "Rollback JAR did not accept HTTP connections." >&2
+sudo journalctl -u paismart.service -n 100 --no-pager || true
 exit 1

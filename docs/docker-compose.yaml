@@ -1,51 +1,6 @@
 name: roboknow
 
 services:
-  backend:
-    image: ${ROBO_BACKEND_IMAGE:?ROBO_BACKEND_IMAGE is required}
-    container_name: roboknow-backend
-    restart: always
-    env_file:
-      - ${ROBO_BACKEND_ENV_FILE:-./backend.env}
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/RoboKnow?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
-      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      ELASTICSEARCH_HOST: es
-      ELASTICSEARCH_PORT: 9200
-      ELASTICSEARCH_SCHEME: http
-      ELASTICSEARCH_USERNAME: elastic
-      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:?ELASTICSEARCH_PASSWORD is required}
-      MINIO_ENDPOINT: http://minio:19000
-      MINIO_ACCESSKEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
-      MINIO_SECRETKEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
-      MINIO_PUBLICURL: http://minio:19000
-      OCR_API_URL: http://ocr-service:8000
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
-      JAVA_TOOL_OPTIONS: >-
-        -Dopenai.api.key=${OPENAI_API_KEY}
-        -Dembedding.api.key=${OPENAI_API_KEY}
-        -Djwt.secret-key=${JWT_SECRET:?JWT_SECRET is required}
-        -Dadmin.password=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
-    ports:
-      - "127.0.0.1:8081:8081"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      es:
-        condition: service_healthy
-      ocr-service:
-        condition: service_healthy
-
   mysql:
     container_name: mysql
     image: mysql:8
@@ -53,7 +8,7 @@ services:
     ports:
       - "127.0.0.1:3307:3306"
     environment:
-      MYSQL_DATABASE: RoboKnow
+      MYSQL_DATABASE: paismart
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
     volumes:
       - mysql-data:/var/lib/mysql

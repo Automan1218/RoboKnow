@@ -2,9 +2,9 @@ server:
   port: 8081 # 指定端口号
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/RoboKnow?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3307/paismart?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: root
-    password: RoboKnow2025
+    password: ${MYSQL_ROOT_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -17,7 +17,7 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password: RoboKnow2025
+      password: ${REDIS_PASSWORD:}
   servlet:
     multipart:
       enabled: true
@@ -55,17 +55,17 @@ spring:
 
 minio:
   endpoint: http://localhost:19000
-  accessKey: admin
-  secretKey: RoboKnow2025
+  accessKey: ${MINIO_ROOT_USER:admin}
+  secretKey: ${MINIO_ROOT_PASSWORD:}
   bucketName: uploads
   publicUrl: http://localhost:19000
 jwt:
-  secret-key: "PXrQbuCwXwOZzkML/Vm2S5rSwt1iybvmKtGDzVEu+Hc="
+  secret-key: ${JWT_SECRET:}
 
 # 管理员账号初始化配置
 admin:
   username: admin
-  password: admin123
+  password: ${ADMIN_PASSWORD:}
   primary-org: default
   org-tags: default,admin
 
@@ -83,7 +83,7 @@ elasticsearch:
   port: 9200            # Elasticsearch端口号
   scheme: http          # 协议（http/https）
   username: elastic     # 安装后生成的默认用户
-  password: RoboKnow2025
+  password: ${ELASTICSEARCH_PASSWORD:}
 
 
 logging:

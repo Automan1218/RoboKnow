@@ -5,15 +5,14 @@ on:
     workflows: [CI]
     types: [completed]
     branches:
-      - dev/hzy
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: cd-roboknow
+  group: cd-paismart
   cancel-in-progress: false
 
 env:
@@ -22,13 +21,13 @@ env:
   PNPM_VERSION: '9.15.9'
 
 jobs:
-  publish-and-deploy:
-    name: Publish GHCR image and deploy to EC2
+  build-and-deploy:
+    name: Build JAR and deploy with systemd
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Resolve source SHA and image name
+      - name: Resolve source SHA
         id: meta
         shell: bash
         run: |
@@ -38,11 +37,7 @@ jobs:
           else
             sha="${{ github.sha }}"
           fi
-          owner="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${owner}/roboknow-backend:${sha}"
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
-          echo "image=${image}" >> "$GITHUB_OUTPUT"
-          echo "Deploy image: ${image}"
 
       - name: Checkout verified source
         uses: actions/checkout@v4
@@ -56,7 +51,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
-      - name: Package backend input JAR
+      - name: Build backend JAR
         run: mvn -B -DskipTests package
 
       - name: Set up pnpm
@@ -71,37 +66,22 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Build frontend artifact
+      - name: Build frontend
         working-directory: frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm build
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.image }}
-          labels: |
-            org.opencontainers.image.revision=${{ steps.meta.outputs.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
       - name: Stage deployment bundle
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p deploy-bundle
+          cp target/RoboKnow-*.jar deploy-bundle/app.jar.new
           cp -r frontend/dist deploy-bundle/dist
           cp docs/docker-compose.yaml deploy-bundle/docker-compose.yaml
           cp deploy/nginx.conf deploy-bundle/nginx.conf
+          cp deploy/paismart.service deploy-bundle/paismart.service
           cp deploy/deploy.sh deploy-bundle/deploy.sh
           cp deploy/rollback.sh deploy-bundle/rollback.sh
 
@@ -118,25 +98,18 @@ jobs:
         shell: bash
         run: |
           rsync -az -e "ssh -i ~/.ssh/ec2_key" \
-            deploy-bundle/ ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/roboknow/
+            deploy-bundle/ ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/paismart/
 
-      - name: Authenticate EC2 to GHCR
-        shell: bash
-        run: |
-          printf '%s' "${{ secrets.GHCR_TOKEN }}" | \
-            ssh -i ~/.ssh/ec2_key ubuntu@${{ secrets.EC2_HOST }} \
-            "sudo docker login ghcr.io --username '${{ secrets.GHCR_USERNAME }}' --password-stdin"
-
-      - name: Deploy backend image and frontend
+      - name: Deploy with systemd
         shell: bash
         run: |
           ssh -i ~/.ssh/ec2_key ubuntu@${{ secrets.EC2_HOST }} \
-            "sudo env ROBO_BACKEND_IMAGE='${{ steps.meta.outputs.image }}' \
-            bash /home/ubuntu/roboknow/deploy.sh"
+            'chmod +x /home/ubuntu/paismart/deploy.sh /home/ubuntu/paismart/rollback.sh && \
+             /home/ubuntu/paismart/deploy.sh'
 
       - name: Deployment summary
         run: |
           echo "## Deployment" >> "$GITHUB_STEP_SUMMARY"
           echo "- Source SHA: ${{ steps.meta.outputs.sha }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Backend image: ${{ steps.meta.outputs.image }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Target: EC2 via Docker Compose" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Backend: JAR managed by systemd (paismart.service)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Target: EC2 via SSH" >> "$GITHUB_STEP_SUMMARY"
