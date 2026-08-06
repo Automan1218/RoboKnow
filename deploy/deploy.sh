@@ -27,13 +27,16 @@ compose() {
   sudo docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
-remove_stopped_legacy_containers() {
-  local container state
-  for container in mysql minio redis kafka es ocr-service; do
-    state="$(sudo docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null || true)"
-    if [[ -n "$state" && "$state" != "running" ]]; then
-      echo "==> Removing stopped legacy container: $container ($state)"
-      sudo docker rm "$container" >/dev/null
+remove_legacy_infrastructure_containers() {
+  local container
+  # These exact names are the pre-Compose deployment containers identified in
+  # CD evidence. Removing a container does not remove its named volume; this
+  # is a one-time migration so current Compose labels and loopback bindings can
+  # take ownership.
+  for container in mysql minio redis kafka es; do
+    if sudo docker inspect "$container" >/dev/null 2>&1; then
+      echo "==> Replacing legacy infrastructure container: $container"
+      sudo docker rm -f "$container" >/dev/null
     fi
   done
 }
@@ -103,6 +106,7 @@ echo "==> Start infrastructure containers"
 # Reconcile every stateful service to the versioned Compose definition. This
 # recreates containers but preserves named volumes, preventing old 0.0.0.0
 # port bindings from surviving a successful deployment.
+remove_legacy_infrastructure_containers
 compose up -d --force-recreate mysql redis kafka es minio
 
 # Rebuild OCR on every release so service-code and image changes take effect.

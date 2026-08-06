@@ -79,6 +79,15 @@ their named volumes, then fails if Docker reports a `0.0.0.0` or IPv6 wildcard
 published binding. This closes the gap between IaC policy output and the
 actual `docker ps` evidence.
 
+The first runtime-enforcement CD run,
+[`31079845957`](https://github.com/Automan1218/RoboKnow/actions/runs/31079845957),
+stopped before DAST when Docker reported the old `kafka` container name was
+owned by a prior Compose project. The migration is deliberately explicit: it
+removes only the five identified legacy container objects, never their named
+volumes, then creates replacement containers from the reviewed Compose file.
+The succeeding runtime artifact is the evidence that the migration completed
+and loopback-only bindings are actually in force.
+
 The remaining informational findings, and any finding not listed as resolved
 by that report, are retained as risk records rather than silently hidden. In
 particular, public static assets may remain cacheable and third-party bundle
