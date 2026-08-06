@@ -33,7 +33,10 @@ security/baselines/zap-report.json
 ```
 
 The next scan then reports resolved findings as concrete closure evidence. Do
-not replace an approved baseline without a review commit.
+not replace an approved baseline without a review commit. A ZAP finding
+fingerprint contains its plugin ID, alert title, HTTP method, and URL, so
+separate checks from the same plugin (such as individual CSP directives) are
+not merged in the remediation totals.
 
 ### Recorded DAST remediation cycle
 

@@ -34,12 +34,17 @@ def zap_findings(report: dict) -> dict[str, dict]:
         for alert in site.get("alerts", []):
             plugin = str(alert.get("pluginid", alert.get("alertRef", "unknown-plugin")))
             risk = str(alert.get("riskcode", alert.get("risk", "unknown")))
+            title = alert.get("alert", plugin)
             instances = alert.get("instances") or [{}]
             for instance in instances:
                 uri = instance.get("uri", site.get("@name", ""))
                 method = instance.get("method", "")
-                key = f"{plugin}|{method}|{uri}"
-                findings[key] = {"severity": risk, "title": alert.get("alert", plugin)}
+                # A ZAP plugin can emit several distinct alerts for the same
+                # URL (for example separate CSP directives). Include the alert
+                # title in the fingerprint so remediation evidence never
+                # collapses independent findings into one result.
+                key = f"{plugin}|{title}|{method}|{uri}"
+                findings[key] = {"severity": risk, "title": title}
     return findings
 
 
