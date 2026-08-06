@@ -7,6 +7,19 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      dast_mode:
+        description: 'DAST mode. Active scans require DAST_ACTIVE_SCAN_ENABLED=true and a dedicated test target.'
+        required: true
+        default: baseline
+        type: choice
+        options:
+          - baseline
+          - active
+      dast_target_url:
+        description: 'Optional target override. Leave blank to use DAST_TARGET_URL or http://EC2_HOST.'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -30,6 +43,8 @@ jobs:
     # The first OCR start can download models and the remote health checks may
     # legitimately take several minutes. Leave enough time for diagnostics too.
     timeout-minutes: 50
+    outputs:
+      source-sha: ${{ steps.meta.outputs.sha }}
     steps:
       - name: Resolve source SHA
         id: meta
@@ -153,3 +168,114 @@ jobs:
           echo "- Source SHA: ${{ steps.meta.outputs.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Backend: JAR managed by systemd (paismart.service)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Target: EC2 via SSH" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Collect container runtime evidence
+        shell: bash
+        run: |
+          ssh -i ~/.ssh/ec2_key -p "$EC2_SSH_PORT" \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "ubuntu@${EC2_HOST}" \
+            'echo "==> docker ps -a"; sudo docker ps -a; \
+             echo "==> service health"; \
+             for container in mysql redis kafka es minio ocr-service; do \
+               printf "%s: " "$container"; \
+               sudo docker inspect --format "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" "$container" 2>&1 || true; \
+             done; \
+             echo "==> OCR logs"; sudo docker logs --tail 100 ocr-service || true; \
+             echo "==> backend service"; sudo systemctl --no-pager --full status paismart.service || true' \
+            > container-runtime-evidence.txt
+
+      - name: Upload container runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-runtime-evidence-${{ github.run_number }}
+          path: container-runtime-evidence.txt
+          if-no-files-found: warn
+
+  dast:
+    name: Dynamic application security test
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Use an explicitly configured URL where possible. EC2_HOST is a safe
+      # baseline-only fallback for the existing deployment topology.
+      DAST_TARGET_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.dast_target_url || vars.DAST_TARGET_URL || format('http://{0}', vars.EC2_HOST) }}
+      DAST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.dast_mode || 'baseline' }}
+      DAST_ACTIVE_SCAN_ENABLED: ${{ vars.DAST_ACTIVE_SCAN_ENABLED || 'false' }}
+    steps:
+      - name: Checkout security reporting tools
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build-and-deploy.outputs.source-sha }}
+
+      - name: Validate DAST authorization and target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$DAST_TARGET_URL" =~ ^https?:// ]]; then
+            echo "::error::DAST_TARGET_URL must be an http(s) URL. Configure repository variable DAST_TARGET_URL."
+            exit 1
+          fi
+          if [[ "$DAST_MODE" == "active" && "$DAST_ACTIVE_SCAN_ENABLED" != "true" ]]; then
+            echo "::error::Active DAST is disabled. It may only run against an authorized test environment after setting DAST_ACTIVE_SCAN_ENABLED=true."
+            exit 1
+          fi
+          mkdir -p dast-reports
+          printf 'target=%s\nmode=%s\ncommit=%s\n' "$DAST_TARGET_URL" "$DAST_MODE" "${{ needs.build-and-deploy.outputs.source-sha }}" > dast-reports/scan-metadata.txt
+
+      - name: Run OWASP ZAP baseline scan
+        if: ${{ env.DAST_MODE == 'baseline' }}
+        shell: bash
+        run: |
+          docker run --rm --user root \
+            -v "${{ github.workspace }}/dast-reports:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "$DAST_TARGET_URL" -m 5 -I \
+            -J /zap/wrk/zap-report.json \
+            -r /zap/wrk/zap-report.html \
+            -x /zap/wrk/zap-report.xml
+
+      - name: Run OWASP ZAP active scan
+        if: ${{ env.DAST_MODE == 'active' }}
+        shell: bash
+        run: |
+          docker run --rm --user root \
+            -v "${{ github.workspace }}/dast-reports:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py -t "$DAST_TARGET_URL" -m 10 -I \
+            -J /zap/wrk/zap-report.json \
+            -r /zap/wrk/zap-report.html \
+            -x /zap/wrk/zap-report.xml
+
+      - name: Produce DAST remediation delta
+        if: always()
+        shell: bash
+        run: |
+          python scripts/security/compare_security_reports.py \
+            --format zap \
+            --current dast-reports/zap-report.json \
+            --baseline security/baselines/zap-report.json \
+            --output dast-reports/remediation-delta.md \
+            --output-json dast-reports/remediation-delta.json
+
+      - name: Upload DAST reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-reports-${{ github.run_number }}
+          path: dast-reports/**
+          if-no-files-found: warn
+
+      - name: Enforce DAST high-risk gate
+        if: always()
+        shell: bash
+        run: |
+          python scripts/security/compare_security_reports.py \
+            --format zap \
+            --current dast-reports/zap-report.json \
+            --baseline security/baselines/zap-report.json \
+            --output /tmp/dast-remediation-delta.md \
+            --fail-on-high
+          cat /tmp/dast-remediation-delta.md >> "$GITHUB_STEP_SUMMARY"

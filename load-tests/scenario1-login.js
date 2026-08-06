@@ -15,11 +15,13 @@ export const options = {
 };
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8081';
+const USERNAME = __ENV.K6_USERNAME || 'admin';
+const PASSWORD = __ENV.K6_PASSWORD || 'admin123';
 
 export default function () {
   const payload = JSON.stringify({
-    username: 'admin',
-    password: 'admin123',
+    username: USERNAME,
+    password: PASSWORD,
   });
 
   const params = {

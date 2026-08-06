@@ -17,6 +17,7 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  packages: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -324,6 +325,47 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           find target -maxdepth 3 -type f \( -iname '*checkstyle*' -o -iname '*spotbugs*' \) 2>/dev/null | sort || true
 
+  iac-compliance:
+    name: IaC and container policy checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Render Docker Compose infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --env-file deploy/backend.env.example -f docs/docker-compose.yaml config --format json > compose-resolved.json
+
+      - name: Enforce versioned infrastructure baseline
+        shell: bash
+        run: |
+          python scripts/compliance/verify_compose_policy.py \
+            --compose compose-resolved.json \
+            --output iac-compliance-report.md
+
+      - name: Upload IaC compliance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iac-compliance-evidence
+          path: |
+            compose-resolved.json
+            iac-compliance-report.md
+          if-no-files-found: warn
+
+      - name: Summarize IaC compliance evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## IaC and container policy checks"
+            echo "- Artifact: iac-compliance-evidence"
+            echo "- Source of truth: docs/docker-compose.yaml, deploy/deploy.sh, deploy/paismart.service, deploy/nginx.conf"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat iac-compliance-report.md 2>/dev/null || true
+
   dependency-vulnerability-scan:
     name: Dependency vulnerability scan
     runs-on: ubuntu-latest
@@ -469,15 +511,64 @@ jobs:
             trivy-frontend-fs.sarif
           if-no-files-found: warn
 
+      - name: Produce SAST remediation deltas
+        if: always()
+        shell: bash
+        run: |
+          python scripts/security/compare_security_reports.py \
+            --format sarif \
+            --current trivy-backend-image.sarif \
+            --baseline security/baselines/trivy-backend-image.sarif \
+            --output trivy-backend-remediation-delta.md \
+            --output-json trivy-backend-remediation-delta.json
+          python scripts/security/compare_security_reports.py \
+            --format sarif \
+            --current trivy-frontend-fs.sarif \
+            --baseline security/baselines/trivy-frontend-fs.sarif \
+            --output trivy-frontend-remediation-delta.md \
+            --output-json trivy-frontend-remediation-delta.json
+
+      - name: Upload SAST remediation deltas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-remediation-deltas
+          path: |
+            trivy-*-remediation-delta.md
+            trivy-*-remediation-delta.json
+          if-no-files-found: warn
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ success() && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish scanned backend image to GitHub Container Registry
+        if: ${{ success() && github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}-backend"
+          docker tag "roboknow-backend:${{ github.sha }}" "$image:${{ github.sha }}"
+          docker tag "roboknow-backend:${{ github.sha }}" "$image:main"
+          docker push "$image:${{ github.sha }}"
+          docker push "$image:main"
+          echo "GHCR_IMAGE=$image:${{ github.sha }}" >> "$GITHUB_ENV"
+
       - name: Summarize Docker image and Trivy scans
         if: always()
         run: |
           echo "## Docker image" >> "$GITHUB_STEP_SUMMARY"
           echo "- Built image tag: roboknow-backend:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "${GHCR_IMAGE:-}" ]]; then echo "- Published image: ${GHCR_IMAGE}" >> "$GITHUB_STEP_SUMMARY"; fi
           echo "## Trivy vulnerability scans" >> "$GITHUB_STEP_SUMMARY"
           echo "- Backend image scan report: trivy-backend-image.sarif (category: trivy-backend-image)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Frontend dependency scan report: trivy-frontend-fs.sarif (category: trivy-frontend-fs)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Artifact: trivy-scan-reports" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Remediation evidence: sast-remediation-deltas (new, resolved, and persistent findings)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Full results: repo Security tab > Code scanning alerts" >> "$GITHUB_STEP_SUMMARY"
 
   sonar-quality-gate:
@@ -534,6 +625,7 @@ jobs:
       - backend-integration-test
       - frontend-quality
       - backend-static-analysis
+      - iac-compliance
       - docker-image-build
     steps:
       - name: Verify required jobs succeeded
@@ -545,6 +637,7 @@ jobs:
             "backend-integration-test=${{ needs.backend-integration-test.result }}"
             "frontend-quality=${{ needs.frontend-quality.result }}"
             "backend-static-analysis=${{ needs.backend-static-analysis.result }}"
+            "iac-compliance=${{ needs.iac-compliance.result }}"
             "docker-image-build=${{ needs.docker-image-build.result }}"
           )
           printf '%s\n' "${results[@]}"

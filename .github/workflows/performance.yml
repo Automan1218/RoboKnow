@@ -1,0 +1,85 @@
+name: Performance test
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Authorized test environment URL (for example https://staging.example.com)'
+        required: true
+        type: string
+      scenario:
+        description: 'Load-test scenario'
+        required: true
+        default: login-smoke
+        type: choice
+        options:
+          - login-smoke
+          - search-capacity
+      target_qps:
+        description: 'Used only by search-capacity; keep this conservative for shared test environments'
+        required: false
+        default: '10'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ inputs.target_url }}
+  cancel-in-progress: false
+
+jobs:
+  k6:
+    name: k6 authorized performance test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_URL: ${{ inputs.target_url }}
+      K6_USERNAME: ${{ secrets.PERF_TEST_USERNAME }}
+      K6_PASSWORD: ${{ secrets.PERF_TEST_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate test authorization and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$BASE_URL" =~ ^https?:// ]] || { echo "::error::target_url must be an http(s) URL"; exit 1; }
+          [[ -n "$K6_USERNAME" && -n "$K6_PASSWORD" ]] || { echo "::error::Configure PERF_TEST_USERNAME and PERF_TEST_PASSWORD as low-privilege test-account secrets."; exit 1; }
+          mkdir -p performance-reports
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run login smoke performance test
+        if: ${{ inputs.scenario == 'login-smoke' }}
+        working-directory: load-tests
+        run: k6 run --summary-export=../performance-reports/k6-login-summary.json scenario1-login.js
+
+      - name: Run bounded search-capacity test
+        if: ${{ inputs.scenario == 'search-capacity' }}
+        working-directory: load-tests
+        env:
+          TARGET_QPS: ${{ inputs.target_qps }}
+          STEADY_DURATION: 2m
+          P95_MS: 2000
+        run: k6 run --summary-export=../performance-reports/k6-search-capacity-summary.json scenario4-search-capacity.js
+
+      - name: Upload performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-performance-report-${{ github.run_number }}
+          path: performance-reports/**
+          if-no-files-found: warn
+
+      - name: Performance summary
+        if: always()
+        run: |
+          {
+            echo "## Authorized k6 performance test"
+            echo "- Target: $BASE_URL"
+            echo "- Scenario: ${{ inputs.scenario }}"
+            echo "- Artifact: k6-performance-report-${{ github.run_number }}"
+          } >> "$GITHUB_STEP_SUMMARY"

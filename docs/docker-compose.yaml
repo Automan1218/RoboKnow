@@ -162,7 +162,7 @@ services:
     container_name: ocr-service
     restart: always
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ocr-data:/root/.paddleocr
     healthcheck:
