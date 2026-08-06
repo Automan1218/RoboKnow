@@ -6,7 +6,9 @@ services:
     image: mysql:8
     restart: always
     ports:
-      - "127.0.0.1:3307:3306"
+      # The backend runs on the host through systemd, so expose MySQL on the
+      # standard local port used by the docker profile.
+      - "127.0.0.1:3306:3306"
     environment:
       MYSQL_DATABASE: paismart
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
