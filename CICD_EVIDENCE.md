@@ -22,7 +22,9 @@ commit SHA and keeps its raw report files as artifacts.
 Trivy SARIF and ZAP JSON reports are converted to remediation deltas. The delta
 lists new, resolved, and persistent findings; commit SHA and Actions run link
 the fix to the subsequent rescan. After an assessment team approves a baseline,
-store the raw approved report at one of these versioned paths:
+store the raw approved report at one of these versioned paths. Git records who
+accepted it and when; the Actions artifact remains the immutable source output
+for the same run:
 
 ```text
 security/baselines/trivy-backend-image.sarif
@@ -32,6 +34,24 @@ security/baselines/zap-report.json
 
 The next scan then reports resolved findings as concrete closure evidence. Do
 not replace an approved baseline without a review commit.
+
+### Recorded DAST remediation cycle
+
+The first approved DAST baseline is the OWASP ZAP JSON report from CD run
+[`31069181976`](https://github.com/Automan1218/RoboKnow/actions/runs/31069181976),
+artifact `dast-reports-20`, copied to `security/baselines/zap-report.json`.
+It recorded 13 alert types and no High/Critical finding. This commit adds the
+Nginx response headers that address baseline alerts: CSP (10038),
+anti-clickjacking/X-Frame-Options (10020), X-Content-Type-Options (10021),
+Permissions-Policy (10063), server version exposure (10036), and the
+cross-origin policy header family (90004). The next CD DAST artifact's
+`zap-remediation-delta.md` is the required rescan evidence; its `Resolved
+findings` section must be screenshot alongside this baseline link.
+
+The remaining informational findings, and any finding not listed as resolved
+by that report, are retained as risk records rather than silently hidden. In
+particular, public static assets may remain cacheable and third-party bundle
+comments/timestamp strings need source-level review before changing them.
 
 ## Screenshot checklist for assessment packs
 
@@ -44,6 +64,8 @@ Use the same commit SHA in every screenshot:
 5. SAST and DAST remediation-delta report before and after a fix.
 6. CD deployment summary, DAST job result, `docker ps -a`, and container health state.
 7. k6 JSON summary/terminal output for the authorized performance run.
+8. This section, the `zap-report.json` baseline file, and the subsequent
+   `zap-remediation-delta.md` with its resolved/persistent totals.
 
 ## Container operation evidence
 
@@ -60,10 +82,10 @@ docker logs --tail 200 ocr-service
 docker logs -f ocr-service
 ```
 
-The CI backend image is built as `roboknow-backend:<commit-sha>` and scanned by
-Trivy. OCR is built on the EC2 host from the versioned Dockerfile; persistent
-models live in the named `ocr-data` volume. A registry such as GHCR should be
-configured before claiming centralized image distribution or retention.
+The CI backend image is built as `roboknow-backend:<commit-sha>`, scanned by
+Trivy, and on `main` published to GHCR with both the immutable commit-SHA tag
+and the moving `main` tag. OCR is built on the EC2 host from the versioned
+Dockerfile; persistent models live in the named `ocr-data` volume.
 
 ## Compliance mapping
 
