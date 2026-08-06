@@ -138,5 +138,27 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
 
+echo "==> Verify public Nginx security headers on the deployed virtual host"
+response_headers="$(curl -fsSI --connect-timeout 5 http://127.0.0.1/)"
+printf '%s\n' "$response_headers"
+for header in \
+  'content-security-policy:' \
+  'x-frame-options:' \
+  'x-content-type-options:' \
+  'permissions-policy:' \
+  'cross-origin-opener-policy:' \
+  'cross-origin-embedder-policy:' \
+  'cross-origin-resource-policy:'; do
+  if ! grep -qi "^$header" <<< "$response_headers"; then
+    echo "Expected Nginx response header is missing: $header" >&2
+    sudo nginx -T >&2 || true
+    exit 1
+  fi
+done
+if grep -qi '^server:.*nginx/' <<< "$response_headers"; then
+  echo "Nginx version is still exposed in the Server header." >&2
+  exit 1
+fi
+
 echo "==> Deployment completed"
 sudo systemctl --no-pager --full status paismart.service | head -n 12

@@ -45,8 +45,19 @@ Nginx response headers that address baseline alerts: CSP (10038),
 anti-clickjacking/X-Frame-Options (10020), X-Content-Type-Options (10021),
 Permissions-Policy (10063), server version exposure (10036), and the
 cross-origin policy header family (90004). The next CD DAST artifact's
-`zap-remediation-delta.md` is the required rescan evidence; its `Resolved
+`remediation-delta.md` is the required rescan evidence; its `Resolved
 findings` section must be screenshot alongside this baseline link.
+
+The first rescan, CD run
+[`31076877686`](https://github.com/Automan1218/RoboKnow/actions/runs/31076877686),
+completed its DAST gate but truthfully reported 0 resolved and 33 persistent
+findings. Its raw response showed the Nginx distribution default page (557
+bytes) and `Server: nginx/1.24.0 (Ubuntu)`, proving the deployed virtual host
+was not the one exposed to the DAST target. This follow-up change makes the
+RoboKnow server the explicit `default_server` and makes CD fail unless all
+expected hardening headers are observable on the EC2 host. This failed-closed
+verification is retained as evidence rather than relabelling the prior scan as
+a successful remediation.
 
 The remaining informational findings, and any finding not listed as resolved
 by that report, are retained as risk records rather than silently hidden. In
@@ -65,7 +76,7 @@ Use the same commit SHA in every screenshot:
 6. CD deployment summary, DAST job result, `docker ps -a`, and container health state.
 7. k6 JSON summary/terminal output for the authorized performance run.
 8. This section, the `zap-report.json` baseline file, and the subsequent
-   `zap-remediation-delta.md` with its resolved/persistent totals.
+   `remediation-delta.md` with its resolved/persistent totals.
 
 ## Container operation evidence
 
