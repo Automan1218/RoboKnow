@@ -233,9 +233,9 @@ jobs:
             -v "${{ github.workspace }}/dast-reports:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t "$DAST_TARGET_URL" -m 5 -I \
-            -J /zap/wrk/zap-report.json \
-            -r /zap/wrk/zap-report.html \
-            -x /zap/wrk/zap-report.xml
+            -J zap-report.json \
+            -r zap-report.html \
+            -x zap-report.xml
 
       - name: Run OWASP ZAP active scan
         if: ${{ env.DAST_MODE == 'active' }}
@@ -245,9 +245,9 @@ jobs:
             -v "${{ github.workspace }}/dast-reports:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-full-scan.py -t "$DAST_TARGET_URL" -m 10 -I \
-            -J /zap/wrk/zap-report.json \
-            -r /zap/wrk/zap-report.html \
-            -x /zap/wrk/zap-report.xml
+            -J zap-report.json \
+            -r zap-report.html \
+            -x zap-report.xml
 
       - name: Produce DAST remediation delta
         if: always()
