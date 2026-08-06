@@ -38,6 +38,18 @@ remove_stopped_legacy_containers() {
   done
 }
 
+assert_loopback_port_bindings() {
+  local container bindings
+  for container in mysql redis kafka es minio ocr-service; do
+    bindings="$(sudo docker inspect --format '{{range $port, $items := .HostConfig.PortBindings}}{{$port}} {{range $items}}{{.HostIp}}:{{.HostPort}} {{end}}{{end}}' "$container")"
+    echo "==> $container published bindings: $bindings"
+    if [[ "$bindings" == *'0.0.0.0:'* || "$bindings" == *'[::]:'* || "$bindings" == *':::'* ]]; then
+      echo "Container $container exposes an infrastructure port beyond loopback." >&2
+      return 1
+    fi
+  done
+}
+
 wait_for_container_health() {
   local container="$1"
   local attempts="${2:-60}"
@@ -88,18 +100,10 @@ fi
 sudo sysctl -w vm.max_map_count=262144 >/dev/null
 
 echo "==> Start infrastructure containers"
-remove_stopped_legacy_containers
-services=()
-for service in mysql redis kafka es minio; do
-  if [[ "$(sudo docker inspect --format '{{.State.Status}}' "$service" 2>/dev/null || true)" == "running" ]]; then
-    echo "==> Reusing running legacy container: $service"
-  else
-    services+=("$service")
-  fi
-done
-if (( ${#services[@]} > 0 )); then
-  compose up -d "${services[@]}"
-fi
+# Reconcile every stateful service to the versioned Compose definition. This
+# recreates containers but preserves named volumes, preventing old 0.0.0.0
+# port bindings from surviving a successful deployment.
+compose up -d --force-recreate mysql redis kafka es minio
 
 # Rebuild OCR on every release so service-code and image changes take effect.
 # The named ocr-data volume preserves downloaded PaddleOCR models across recreates.
@@ -111,6 +115,7 @@ wait_for_container_health kafka 60
 wait_for_container_health es 60
 # A first run may download PaddleOCR models before the HTTP health endpoint is ready.
 wait_for_container_health ocr-service 180
+assert_loopback_port_bindings
 
 echo "==> Rotate and install backend JAR"
 if [[ -f "$CURRENT_JAR" ]]; then cp "$CURRENT_JAR" "$PREVIOUS_JAR"; fi

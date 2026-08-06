@@ -72,6 +72,13 @@ gives the presentation a complete trace: baseline finding, attempted fix,
 effective-configuration proof, failed-closed gate, targeted correction, and
 the next rescan.
 
+Runtime evidence from the successful deployment is also checked against the
+Compose port-binding policy. The deploy script now recreates the six managed
+infrastructure containers from the versioned Compose file while preserving
+their named volumes, then fails if Docker reports a `0.0.0.0` or IPv6 wildcard
+published binding. This closes the gap between IaC policy output and the
+actual `docker ps` evidence.
+
 The remaining informational findings, and any finding not listed as resolved
 by that report, are retained as risk records rather than silently hidden. In
 particular, public static assets may remain cacheable and third-party bundle
