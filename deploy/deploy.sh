@@ -134,7 +134,12 @@ sudo mkdir -p /var/www/roboknow
 sudo rsync -a --delete dist/ /var/www/roboknow/
 sudo cp nginx.conf /etc/nginx/sites-available/roboknow
 sudo ln -sf /etc/nginx/sites-available/roboknow /etc/nginx/sites-enabled/roboknow
+# `paismart` is the previous deployment's enabled virtual-host link. Its
+# server_name `_` wins request routing before RoboKnow and would make DAST scan
+# the old/default site. Remove only the known enabled links, not the archived
+# sites-available configuration.
 sudo rm -f /etc/nginx/sites-enabled/default
+sudo rm -f /etc/nginx/sites-enabled/paismart
 sudo nginx -t
 sudo systemctl reload nginx
 

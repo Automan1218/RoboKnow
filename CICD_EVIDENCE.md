@@ -59,6 +59,16 @@ expected hardening headers are observable on the EC2 host. This failed-closed
 verification is retained as evidence rather than relabelling the prior scan as
 a successful remediation.
 
+The next CD run, [`31077611908`](https://github.com/Automan1218/RoboKnow/actions/runs/31077611908),
+was intentionally stopped by that verification before DAST ran. Its `nginx -T`
+evidence identified the exact cause: the stale enabled virtual-host link
+`/etc/nginx/sites-enabled/paismart` used the same `server_name _` and routed
+requests to `/var/www/paismart` before the RoboKnow host. The deployment now
+removes only that confirmed legacy enabled link before Nginx validation. This
+gives the presentation a complete trace: baseline finding, attempted fix,
+effective-configuration proof, failed-closed gate, targeted correction, and
+the next rescan.
+
 The remaining informational findings, and any finding not listed as resolved
 by that report, are retained as risk records rather than silently hidden. In
 particular, public static assets may remain cacheable and third-party bundle
