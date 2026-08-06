@@ -27,7 +27,9 @@ jobs:
     name: Build JAR and deploy with systemd
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # The first OCR start can download models and the remote health checks may
+    # legitimately take several minutes. Leave enough time for diagnostics too.
+    timeout-minutes: 50
     steps:
       - name: Resolve source SHA
         id: meta
@@ -120,10 +122,30 @@ jobs:
         shell: bash
         run: |
           ssh -i ~/.ssh/ec2_key -p "$EC2_SSH_PORT" \
-            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
             "ubuntu@${EC2_HOST}" \
             'chmod +x /home/ubuntu/paismart/deploy.sh /home/ubuntu/paismart/rollback.sh && \
              /home/ubuntu/paismart/deploy.sh'
+
+      - name: Collect remote diagnostics on deployment failure
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          ssh -i ~/.ssh/ec2_key -p "$EC2_SSH_PORT" \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "ubuntu@${EC2_HOST}" \
+            'echo "==> paismart.service status"; \
+             sudo systemctl --no-pager --full status paismart.service || true; \
+             echo "==> paismart.service journal"; \
+             sudo journalctl -u paismart.service -n 200 --no-pager || true; \
+             echo "==> listeners on port 8081"; \
+             sudo ss -ltnp "( sport = :8081 )" || true; \
+             echo "==> container state"; \
+             sudo docker ps -a || true; \
+             echo "==> OCR health and logs"; \
+             sudo docker inspect --format "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" ocr-service || true; \
+             sudo docker logs --tail 200 ocr-service || true'
 
       - name: Deployment summary
         run: |
