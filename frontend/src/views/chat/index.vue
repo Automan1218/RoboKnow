@@ -27,14 +27,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-0 overflow-hidden">
+  <div class="flex h-full min-h-0 overflow-hidden">
     <!-- Session sidebar (GPT/Claude style) -->
     <SessionList />
 
     <!-- Main chat area -->
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
       <ChatList class="min-h-0 flex-1" />
-      <InputBox />
+      <InputBox class="shrink-0" />
     </div>
   </div>
 
