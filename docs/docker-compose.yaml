@@ -50,11 +50,14 @@ services:
       - redis-data:/data
     healthcheck:
       start_period: 5s
-      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-    command: sh -c "redis-server --bind 0.0.0.0 --port 6379 --requirepass '$${REDIS_PASSWORD}' --appendonly yes"
+    # Keep the variable unquoted in the shell command so it is expanded inside
+    # the container. Single quotes here would make Redis use the literal text
+    # "$REDIS_PASSWORD" as its password while the health check still passes.
+    command: sh -c 'exec redis-server --bind 0.0.0.0 --port 6379 --requirepass "$$REDIS_PASSWORD" --appendonly yes'
 
   kafka:
     image: bitnamilegacy/kafka:latest
